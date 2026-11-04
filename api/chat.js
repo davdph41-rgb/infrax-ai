@@ -62,12 +62,7 @@ export default async function handler(req) {
         apiKey: process.env.GROQ_API_KEY,
         model: 'openai/gpt-oss-120b',
       },
-      {
-        name: 'Gemini Pro', // Versi Pintar
-        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        apiKey: process.env.GEMINI_API_KEY,
-        model: 'gemini-3.5-flash',
-      },
+      
       {
         name: 'Gemini Lite', // Versi Cadangan (Anti-Limit)
         endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
