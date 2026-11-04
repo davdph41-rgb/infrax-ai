@@ -8,17 +8,16 @@ export default async function handler(req) {
 
   try {
     const body = await req.json();
-    let messages = body?.messages;
-    const apiKey = process.env.OPENAI_API_KEY; // <-- Menggunakan API Key OpenAI
+    const messages = body?.messages;
+    const apiKey = process.env.OPENAI_API_KEY;
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Format messages salah' }), { status: 400 });
     }
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API Key OpenAI belum diset di Vercel.' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'API Key OpenAI belum diset.' }), { status: 500 });
     }
 
-    // System Prompt agar AI rapi dalam memberikan kode
     const systemMessage = {
       role: 'system',
       content: `Anda adalah asisten AI. ATURAN WAJIB:
@@ -27,47 +26,34 @@ export default async function handler(req) {
       3. Jika memberikan HTML dan CSS, pisahkan menjadi dua blok kode yang berbeda.
       4. Jangan pernah menulis kode di luar blok markdown.`
     };
-    
-    const messagesWithSystem = [systemMessage, ...messages];
 
     const endpoint = 'https://api.openai.com/v1/chat/completions';
     
-    // Model OpenAI: gpt-4o-mini sangat cepat dan sangat murah
-    const modelsToTry = ['gpt-4o-mini', 'gpt-3.5-turbo']; 
-    
-    let response;
-    let isSuccess = false;
+    // Ganti ke model yang masih aktif, misalnya gpt-4.1-mini
+    const modelName = 'gpt-4.1-mini';
 
-    for (const model of modelsToTry) {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: messagesWithSystem,
-          stream: true,
-          temperature: 0.3 // Menjaga AI tetap fokus dan tidak berhalusinasi
-        }),
-      });
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [systemMessage, ...messages],
+        stream: true,
+        temperature: 0.3
+      }),
+    });
 
-      if (response.ok) {
-        isSuccess = true;
-        break;
-      }
-    }
-
-    if (!isSuccess) {
+    if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       return new Response(JSON.stringify({ 
-        error: `⚠️ Gagal memproses (Kode: ${response.status}). Pastikan saldo OpenAI cukup.`,
+        error: `⚠️ Gagal memproses (Kode: ${response.status}).`,
         details: errorData
       }), { status: response.status });
     }
 
-    // Kembalikan stream ke frontend
     return new Response(response.body, {
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
