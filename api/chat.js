@@ -1,5 +1,6 @@
 // api/chat.js
 export const config = { runtime: 'edge' };
+export const maxDuration = 60; // <-- TAMBAHKAN INI (Maksimal 60 detik)
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -118,8 +119,6 @@ export default async function handler(req) {
           });
         }
         
-        // --- PERBAIKAN: BACA ERROR SEBAGAI TEKS, BUKAN JSON ---
-        // Ini mencegah crash jika Google mengirim balasan HTML
         const errorText = await response.text().catch(() => "Unknown error");
         console.error(`[Gagal] ${provider.name} Error: ${response.status} - ${errorText.substring(0, 100)}`);
         
