@@ -6,7 +6,7 @@
 }
 
 body { 
-  background: #e5ddd5; /* Latar belakang ala WhatsApp */
+  background: #e5ddd5;
   display: flex; 
   justify-content: center; 
   height: 100vh;
@@ -42,15 +42,8 @@ body {
   padding: 2px;
 }
 
-.header-info h2 {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.header-info span {
-  font-size: 12px;
-  color: #a8c7c2;
-}
+.header-info h2 { font-size: 16px; font-weight: 600; }
+.header-info span { font-size: 12px; color: #a8c7c2; }
 
 /* Desain Area Chat */
 .chat-box { 
@@ -68,8 +61,8 @@ body {
 .message { 
   padding: 10px 15px; 
   border-radius: 8px; 
-  max-width: 85%; 
-  line-height: 1.4;
+  max-width: 90%; /* Diperlebar sedikit untuk kode */
+  line-height: 1.5;
   word-wrap: break-word;
   font-size: 15px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -88,9 +81,61 @@ body {
   color: #333; 
   align-self: flex-start;
   border-top-left-radius: 0;
+  width: 100%; /* Agar blok kode bisa maksimal */
 }
 
-/* Kursor Berkedip untuk Efek Mengetik */
+/* --- STYLING MARKDOWN --- */
+.bot p { margin-bottom: 10px; }
+.bot p:last-child { margin-bottom: 0; }
+.bot strong { font-weight: 700; color: #111; }
+.bot ul, .bot ol { margin-left: 20px; margin-bottom: 10px; }
+.bot li { margin-bottom: 5px; }
+.bot h1, .bot h2, .bot h3 { margin-top: 15px; margin-bottom: 10px; color: #075e54; }
+
+/* Styling Blok Kode */
+.bot pre {
+  background: #282c34;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 10px 0;
+  position: relative;
+}
+
+.bot code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+}
+
+/* Kode dalam teks (inline code) */
+.bot p code {
+  background: #f0f0f0;
+  color: #d9534f;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* Tombol Salin (Copy) pada Blok Kode */
+.copy-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #abb2bf;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+/* Kursor Berkedip */
 .typing-cursor {
   display: inline-block;
   width: 8px;
@@ -100,10 +145,7 @@ body {
   animation: blink 1s step-end infinite;
   vertical-align: middle;
 }
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
+@keyframes blink { 50% { opacity: 0; } }
 
 /* Desain Input */
 .input-area { 
@@ -124,21 +166,9 @@ body {
 }
 
 #send-btn { 
-  width: 48px;
-  height: 48px;
-  border: none; 
-  background: #075e54; 
-  color: white; 
-  border-radius: 50%; 
-  cursor: pointer; 
-  font-size: 18px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: 0.2s;
+  width: 48px; height: 48px;
+  border: none; background: #075e54; color: white; 
+  border-radius: 50%; cursor: pointer; font-size: 18px;
+  display: flex; justify-content: center; align-items: center;
 }
-
-#send-btn:disabled {
-  background: #a0c4ff;
-  cursor: not-allowed;
-}
+#send-btn:disabled { background: #a0c4ff; cursor: not-allowed; }
