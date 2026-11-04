@@ -1,13 +1,7 @@
 const { neon } = require('@neondatabase/serverless');
 
 exports.handler = async function(event, context) {
-  // Cek apakah URL Database ada
-  if (!process.env.DATABASE_URL) {
-    return { 
-      statusCode: 500, 
-      body: JSON.stringify({ error: 'DATABASE_URL belum diset di Environment Variables Netlify.' }) 
-    };
-  }
+  if (!process.env.DATABASE_URL) return { statusCode: 500, body: JSON.stringify({ error: 'DATABASE_URL kosong.' }) };
 
   const sql = neon(process.env.DATABASE_URL);
   const method = event.httpMethod;
@@ -37,12 +31,15 @@ exports.handler = async function(event, context) {
       }
     }
 
+    // TAMBAHAN: FITUR HAPUS CHAT
+    if (method === 'DELETE') {
+      if (!chatId) return { statusCode: 400, body: JSON.stringify({ error: 'chatId required' }) };
+      await sql`DELETE FROM chats WHERE id = ${chatId}`;
+      return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    }
+
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   } catch (error) {
-    // Mengembalikan pesan error asli dari Database Neon
-    return { 
-      statusCode: 500, 
-      body: JSON.stringify({ error: `Database Error: ${error.message}` }) 
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: `Database Error: ${error.message}` }) };
   }
 };
