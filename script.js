@@ -54,10 +54,19 @@ cancelImageBtn.addEventListener('click', () => {
   previewContainer.style.display = 'none';
 });
 
-function addMessage(content, sender, imageBase64 = null) {
+// FUNGSI ADD MESSAGE: Sekarang menerima parameter senderName
+function addMessage(content, sender, senderName = '', imageBase64 = null) {
   const msgDiv = document.createElement('div');
   msgDiv.classList.add('message', sender);
   
+  // Tampilkan nama pengirim
+  if (senderName) {
+    const nameDiv = document.createElement('div');
+    nameDiv.classList.add('sender-name');
+    nameDiv.textContent = senderName;
+    msgDiv.appendChild(nameDiv);
+  }
+
   if (imageBase64) {
     const img = document.createElement('img');
     img.src = imageBase64;
@@ -106,7 +115,9 @@ async function sendMessage() {
 
   const currentImage = selectedImageBase64;
   
-  addMessage(text, 'user', currentImage);
+  // Tampilkan pesan user dengan nama "You"
+  addMessage(text, 'user', 'You', currentImage);
+  
   userInput.value = '';
   cancelImageBtn.click(); 
   
@@ -125,8 +136,10 @@ async function sendMessage() {
   sendBtn.disabled = true;
   userInput.disabled = true;
   
-  const botMsgDiv = addMessage('', 'bot');
+  // Buat pesan bot kosong dengan nama sementara "Menghubungkan..."
+  const botMsgDiv = addMessage('', 'bot', 'Menghubungkan...');
   const textSpan = botMsgDiv.querySelector('.markdown-body');
+  const nameDiv = botMsgDiv.querySelector('.sender-name');
   
   const cursor = document.createElement('span');
   cursor.classList.add('typing-cursor');
@@ -147,25 +160,29 @@ async function sendMessage() {
       } else {
         errorMessage = `⚠️ Server Error (${response.status}).`;
       }
+      
+      // Ubah nama menjadi "Error" jika gagal
+      if (nameDiv) nameDiv.textContent = 'System Error';
       throw new Error(errorMessage);
     }
+
+    // BACA HEADER X-AI-PROVIDER (Nama AI yang menjawab)
+    const aiName = response.headers.get('X-AI-Provider') || 'AI';
+    if (nameDiv) nameDiv.textContent = aiName; // Ganti "Menghubungkan..." dengan nama AI asli
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let done = false;
     let fullText = '';
-    let buffer = ''; // <-- SISTEM BUFFER BARU
+    let buffer = ''; 
 
     while (!done) {
       const { value, done: readerDone } = await reader.read();
       done = readerDone;
       
       if (value) {
-        // Tambahkan potongan baru ke buffer
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        
-        // Simpan baris terakhir (yang mungkin belum lengkap) kembali ke buffer
         buffer = lines.pop(); 
 
         for (const line of lines) {
@@ -179,15 +196,12 @@ async function sendMessage() {
                 textSpan.innerHTML = marked.parse(fullText); 
                 chatBox.scrollTop = chatBox.scrollHeight;
               }
-            } catch (e) {
-              // Abaikan error parsing jika JSON belum lengkap
-            }
+            } catch (e) {}
           }
         }
       }
     }
 
-    // Proses sisa buffer jika ada
     if (buffer.startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
         try {
             const data = JSON.parse(buffer.substring(6));
