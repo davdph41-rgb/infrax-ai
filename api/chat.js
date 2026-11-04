@@ -25,21 +25,20 @@ export default async function handler(req) {
     const messagesWithSystem = [systemMessage, ...messages];
 
     // ==========================================
-    // UJI COBA: HANYA GEMINI YANG AKTIF
+    // UJI COBA: HANYA OPENAI YANG AKTIF
     // ==========================================
     const providers = [
       {
-        name: 'Gemini',
-        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        apiKey: process.env.GEMINI_API_KEY,
-        model: 'gemini-3.5-flash-lite', // Model Gemini terbaru
+        name: 'OpenAI',
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        apiKey: process.env.OPENAI_API_KEY, // Pastikan ini sudah diset di Vercel
+        model: 'gpt-4o-mini',               // Model paling hemat dan cepat
       }
     ];
 
     for (const provider of providers) {
       if (!provider.apiKey) {
-        console.log(`[SKIP] API Key untuk ${provider.name} tidak ditemukan.`);
-        continue; 
+        return new Response(JSON.stringify({ error: 'API Key OpenAI belum diset di Vercel.' }), { status: 500 });
       }
 
       try {
@@ -70,20 +69,21 @@ export default async function handler(req) {
           });
         }
 
-        // Jika error, tampilkan kode errornya di console Vercel
-        console.error(`[Gagal] ${provider.name} merespons dengan kode: ${response.status}`);
+        // Penanganan Error Khusus OpenAI
+        console.error(`[Gagal] OpenAI merespons dengan kode: ${response.status}`);
         
-        // Jika error 503 (Server Sibuk)
-        if (response.status === 503) {
-           return new Response(JSON.stringify({ error: '⚠️ Server Gemini sedang kelebihan beban. Coba lagi nanti.' }), { status: 503 });
+        if (response.status === 401) {
+          return new Response(JSON.stringify({ error: '⚠️ API Key OpenAI tidak valid.' }), { status: 401 });
+        } else if (response.status === 429) {
+          return new Response(JSON.stringify({ error: '⚠️ Saldo OpenAI habis atau terkena limit (Quota Exceeded). Silakan cek Billing.' }), { status: 429 });
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          return new Response(JSON.stringify({ error: `⚠️ Error OpenAI (Kode: ${response.status}).`, details: errData }), { status: response.status });
         }
-        
-        // Jika error 429 (Limit) atau 401 (Key salah)
-        return new Response(JSON.stringify({ error: `⚠️ Gagal terhubung ke Gemini (Kode: ${response.status}). Periksa API Key.` }), { status: response.status });
 
       } catch (error) {
-        console.error(`[Error Jaringan] Gagal menghubungi ${provider.name}:`, error.message);
-        return new Response(JSON.stringify({ error: '⚠️ Koneksi ke Gemini terputus.' }), { status: 500 });
+        console.error(`[Error Jaringan] Gagal menghubungi OpenAI:`, error.message);
+        return new Response(JSON.stringify({ error: '⚠️ Koneksi ke OpenAI terputus.' }), { status: 500 });
       }
     }
 
