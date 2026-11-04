@@ -24,7 +24,7 @@ body {
   overflow: hidden;
 }
 
-/* --- SIDEBAR (RIWAYAT) --- */
+/* --- SIDEBAR --- */
 .sidebar {
   position: absolute;
   top: 0; left: -280px;
@@ -57,10 +57,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: 0.2s;
 }
-
-.new-chat-btn:hover { background: #2a2b32; }
 
 .chat-history-list {
   flex: 1;
@@ -78,7 +75,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #ececf1;
-  transition: 0.2s;
 }
 
 .history-item:hover, .history-item.active {
@@ -92,7 +88,6 @@ body {
   background: rgba(0,0,0,0.5);
   z-index: 999;
   display: none;
-  backdrop-filter: blur(2px);
 }
 .overlay.open { display: block; }
 
@@ -111,7 +106,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  z-index: 10;
+  z-index: 10; /* Lebih rendah dari overlay */
 }
 
 .menu-btn {
@@ -121,6 +116,7 @@ body {
   font-size: 20px;
   cursor: pointer;
   padding: 5px;
+  z-index: 1001; /* Paksa paling atas agar bisa diklik */
 }
 
 .avatar-header img { width: 40px; height: 40px; border-radius: 50%; background: white; }
@@ -147,24 +143,15 @@ body {
   overflow-wrap: break-word; 
   font-size: 15px;
   position: relative;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .user { background: #dcf8c6; color: #333; align-self: flex-end; border-top-right-radius: 0; }
 .bot { background: white; color: #333; align-self: flex-start; border-top-left-radius: 0; width: 100%; }
 
-/* NAMA PENGIRIM (YOU DAN AI) */
-.sender-name {
-  font-size: 11px;
-  font-weight: 800;
-  margin-bottom: 5px;
-  display: block;
-  letter-spacing: 0.5px;
-}
+.sender-name { font-size: 11px; font-weight: 800; margin-bottom: 5px; display: block; letter-spacing: 0.5px; }
 .user .sender-name { color: #5a8a62; text-align: right; }
 .bot .sender-name { color: #075e54; text-align: left; text-transform: uppercase; }
 
-/* Markdown & Kode */
 .chat-image { max-width: 100%; border-radius: 8px; margin-bottom: 8px; }
 .bot p, .bot li { word-break: break-word; }
 .bot pre { background: #1e1e1e !important; border-radius: 8px; padding: 35px 15px 15px 15px; overflow-x: auto; margin: 15px 0; position: relative; }
@@ -174,7 +161,6 @@ body {
 .typing-cursor { display: inline-block; width: 8px; height: 15px; background: #075e54; margin-left: 4px; animation: blink 1s step-end infinite; vertical-align: middle; }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* Input Area */
 .input-area { background: #f0f0f0; display: flex; flex-direction: column; }
 .image-preview-container { padding: 10px 15px 0 15px; position: relative; width: fit-content; }
 .image-preview-container img { height: 60px; border-radius: 8px; border: 2px solid #075e54; }
