@@ -3,13 +3,9 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 let conversationHistory = [];
 
-// Konfigurasi Marked.js (Parsing Markdown)
+// Matikan pewarnaan otomatis saat streaming untuk mencegah error
 marked.setOptions({
-  highlight: function (code, lang) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-    return hljs.highlight(code, { language }).value;
-  },
-  breaks: true // Agar enter di chat jadi <br>
+  breaks: true 
 });
 
 // Fungsi menambah pesan ke layar
@@ -36,7 +32,6 @@ function addCopyButtons(container) {
   const preElements = container.querySelectorAll('pre');
   
   preElements.forEach(pre => {
-    // Cek jika tombol belum ada
     if (!pre.querySelector('.copy-btn')) {
       const btn = document.createElement('button');
       btn.className = 'copy-btn';
@@ -66,7 +61,6 @@ async function sendMessage() {
   sendBtn.disabled = true;
   userInput.disabled = true;
   
-  // Siapkan pesan bot kosong
   const botMsgDiv = addMessage('', 'bot');
   const textSpan = botMsgDiv.querySelector('.markdown-body');
   
@@ -107,7 +101,7 @@ async function sendMessage() {
               
               if (content) {
                 fullText += content;
-                // Ubah teks mentah menjadi HTML cantik secara real-time
+                // Tampilkan teks secara mentah (tanpa pewarnaan) saat masih streaming
                 textSpan.innerHTML = marked.parse(fullText); 
                 chatBox.scrollTop = chatBox.scrollHeight;
               }
@@ -117,11 +111,18 @@ async function sendMessage() {
       }
     }
 
-    // Setelah selesai, hapus kursor, warnai kode, & tambahkan tombol Salin
+    // --- STREAMING SELESAI ---
     botMsgDiv.removeChild(cursor);
-    textSpan.innerHTML = marked.parse(fullText);
-    addCopyButtons(textSpan);
     
+    // Render ulang secara utuh, lalu berikan pewarnaan kode (highlight)
+    textSpan.innerHTML = marked.parse(fullText);
+    
+    // Terapkan warna-warni kode setelah teks selesai
+    textSpan.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+    });
+    
+    addCopyButtons(textSpan);
     conversationHistory.push({ role: 'assistant', content: fullText });
 
   } catch (error) {
