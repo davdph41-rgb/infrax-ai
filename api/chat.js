@@ -1,7 +1,4 @@
-// api/chat.js untuk Netlify
-
 exports.handler = async function(event, context) {
-  // 1. Pastikan hanya menerima POST
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
@@ -15,29 +12,17 @@ exports.handler = async function(event, context) {
     }
 
     const lastMessageObj = messages[messages.length - 1];
-    let lastText = "";
+    let lastText = typeof lastMessageObj.content === 'string' ? lastMessageObj.content.toLowerCase() : 
+                   (Array.isArray(lastMessageObj.content) ? (lastMessageObj.content.find(c => c.type === 'text')?.text || '').toLowerCase() : '');
     
-    if (typeof lastMessageObj.content === 'string') {
-      lastText = lastMessageObj.content.toLowerCase();
-    } else if (Array.isArray(lastMessageObj.content)) {
-      const textPart = lastMessageObj.content.find(c => c.type === 'text');
-      if (textPart && textPart.text) lastText = textPart.text.toLowerCase();
-    }
-
     let forcedProvider = null;
     if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
     else if (lastText.includes('!groq')) forcedProvider = 'Groq';
     else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
 
-    const hasImage = Array.isArray(lastMessageObj.content) && 
-                     lastMessageObj.content.some(item => item.type === 'image_url');
-
-    const systemMessage = {
-      role: 'system',
-      content: `Anda adalah asisten AI. ATURAN WAJIB: 1. Jika memberikan kode, SELALU bungkus dengan blok markdown tiga backtick. 2. JANGAN memotong kode.`
-    };
-
-    const messagesWithSystem = [systemMessage, ...messages];
+    const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
+    const sysMsg = { role: 'system', content: `ATURAN: Bungkus kode dengan blok markdown tiga backtick.` };
+    const finalMessages = [sysMsg, ...messages];
 
     const allProviders = [
       { name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' },
@@ -46,67 +31,42 @@ exports.handler = async function(event, context) {
       { name: 'Gemini Lite', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash-lite' }
     ];
 
-    let activeProviders = [...allProviders];
+    let active = [...allProviders];
+    if (forcedProvider) active = forcedProvider === 'Gemini' ? active.filter(p => p.name.includes('Gemini')) : active.filter(p => p.name === forcedProvider);
+    if (hasImage) active = active.filter(p => p.name !== 'Groq');
 
-    if (forcedProvider) {
-      if (forcedProvider === 'Gemini') {
-        activeProviders = activeProviders.filter(p => p.name.includes('Gemini'));
-      } else {
-        activeProviders = activeProviders.filter(p => p.name === forcedProvider);
+    let lastErrorMsg = "Semua server AI sibuk atau API Key belum diset.";
+
+    for (const p of active) {
+      if (!p.apiKey) {
+        console.log(`API Key ${p.name} kosong.`);
+        continue;
       }
-    }
-
-    if (hasImage) {
-      activeProviders = activeProviders.filter(p => p.name !== 'Groq');
-      if (!forcedProvider) {
-        activeProviders.sort((a, b) => (b.name.includes('Gemini') ? 1 : -1));
-      }
-    }
-
-    for (const provider of activeProviders) {
-      if (!provider.apiKey) continue;
-
       try {
-        const response = await fetch(provider.endpoint, {
+        const res = await fetch(p.endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${provider.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: provider.model,
-            messages: messagesWithSystem,
-            stream: false, // Netlify Functions standar tidak mendukung streaming langsung, jadi kita ubah ke false sementara
-            temperature: 0.3
-          }),
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${p.apiKey}` },
+          body: JSON.stringify({ model: p.model, messages: finalMessages, temperature: 0.3 }),
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          const botReply = data.choices[0].message.content;
-          
+        if (res.ok) {
+          const data = await res.json();
           return {
             statusCode: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'X-AI-Provider': provider.name
-            },
-            body: JSON.stringify({ 
-              choices: [{ message: { content: botReply } }] 
-            })
+            headers: { 'Content-Type': 'application/json', 'X-AI-Provider': p.name },
+            body: JSON.stringify({ choices: [{ message: { content: data.choices[0].message.content } }] })
           };
+        } else {
+          lastErrorMsg = `${p.name} Error: ${res.status}`;
         }
-      } catch (error) {
-        console.error(`[Error] ${provider.name}:`, error.message);
+      } catch (e) { 
+        lastErrorMsg = `${p.name} Jaringan Error.`; 
       }
     }
 
-    return { 
-      statusCode: 503, 
-      body: JSON.stringify({ error: `⚠️ Semua model AI sedang sibuk.` }) 
-    };
+    return { statusCode: 503, body: JSON.stringify({ error: lastErrorMsg }) };
 
   } catch (error) {
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+    return { statusCode: 500, body: JSON.stringify({ error: `Server Crash: ${error.message}` }) };
   }
 };
