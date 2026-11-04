@@ -1,37 +1,31 @@
 // api/chat.js
-// Vercel Serverless Function (CommonJS, aman tanpa package.json "type": "module")
 
-module.exports = async function handler(req, res) {
-  // Hanya izinkan POST
+export default async function handler(req, res) {
+  // 1. Pastikan hanya menerima request metode POST
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed. Gunakan POST.' });
   }
 
   try {
-    // Vercel biasanya sudah mem-parse body JSON.
-    // Kalau masih string, kita parse manual.
+    // 2. Ambil pesan dari frontend
     let body = req.body;
     if (typeof body === 'string') {
       body = JSON.parse(body);
     }
-
+    
     const messages = body?.messages;
-
     if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: 'Field "messages" wajib berupa array.' });
+      return res.status(400).json({ error: 'Format request salah. Field "messages" wajib berupa array.' });
     }
 
+    // 3. Ambil API Key dari Environment Variable Vercel
     const apiKey = process.env.INFERX_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'INFERX_API_KEY belum diset di Vercel.' });
+      return res.status(500).json({ error: 'API Key belum diset. Tambahkan INFERX_API_KEY di pengaturan Vercel.' });
     }
 
-    // Base URL bisa diatur lewat Environment Variable.
-    // Default mengikuti base URL yang umum dipakai InferX.
-    const baseUrl = process.env.INFERX_BASE_URL || 'https://model.inferx.net/v1';
-    const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
-
-    const inferxResponse = await fetch(endpoint, {
+    // 4. Tembak API InferX (URL yang sudah terbukti berhasil)
+    const inferxResponse = await fetch('https://model.inferx.net/endpoints/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -44,21 +38,26 @@ module.exports = async function handler(req, res) {
       }),
     });
 
+    // 5. Baca respons dari InferX
     const data = await inferxResponse.json().catch(() => ({}));
 
+    // 6. Jika InferX error (misal: 429 kapasitas penuh, atau 401 key salah)
     if (!inferxResponse.ok) {
       return res.status(inferxResponse.status).json({
-        error: 'Gagal memanggil InferX.',
+        error: 'Terjadi kesalahan pada server InferX.',
         status: inferxResponse.status,
         details: data,
       });
     }
 
+    // 7. Jika sukses, kirim balik jawaban ke frontend
     return res.status(200).json(data);
+
   } catch (error) {
+    // Tangkap error sistem (misal: koneksi internet server Vercel putus)
     return res.status(500).json({
-      error: 'Terjadi kesalahan di server.',
+      error: 'Terjadi kesalahan internal pada server.',
       details: error.message,
     });
   }
-};
+}
