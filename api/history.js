@@ -1,6 +1,14 @@
 const { neon } = require('@neondatabase/serverless');
 
 exports.handler = async function(event, context) {
+  // Cek apakah URL Database ada
+  if (!process.env.DATABASE_URL) {
+    return { 
+      statusCode: 500, 
+      body: JSON.stringify({ error: 'DATABASE_URL belum diset di Environment Variables Netlify.' }) 
+    };
+  }
+
   const sql = neon(process.env.DATABASE_URL);
   const method = event.httpMethod;
   const chatId = event.queryStringParameters?.chatId;
@@ -31,6 +39,10 @@ exports.handler = async function(event, context) {
 
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   } catch (error) {
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+    // Mengembalikan pesan error asli dari Database Neon
+    return { 
+      statusCode: 500, 
+      body: JSON.stringify({ error: `Database Error: ${error.message}` }) 
+    };
   }
 };
