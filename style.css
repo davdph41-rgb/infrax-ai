@@ -206,3 +206,23 @@ body {
   display: flex; justify-content: center; align-items: center;
 }
 #send-btn:disabled { background: #a0c4ff; cursor: not-allowed; }
+
+/* ... kode CSS sebelumnya ... */
+
+/* --- STYLING NAMA PENGIRIM (SENDER NAME) --- */
+.sender-name {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 5px;
+  letter-spacing: 0.5px;
+}
+
+.user .sender-name {
+  text-align: right;
+  color: #5a8a62; /* Warna hijau gelap untuk "You" */
+}
+
+.bot .sender-name {
+  text-align: left;
+  color: #075e54; /* Warna tema untuk nama AI */
+}
