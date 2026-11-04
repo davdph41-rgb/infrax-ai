@@ -12,23 +12,38 @@ let selectedImageBase64 = null;
 
 marked.setOptions({ breaks: true });
 
-// --- LOGIKA UPLOAD GAMBAR ---
 uploadBtn.addEventListener('click', () => imageInput.click());
 
 imageInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  if (file.size > 3 * 1024 * 1024) { // Maksimal 3MB
-    alert("Ukuran gambar terlalu besar. Maksimal 3MB.");
-    return;
-  }
-
   const reader = new FileReader();
   reader.onload = (event) => {
-    selectedImageBase64 = event.target.result;
-    imagePreview.src = selectedImageBase64;
-    previewContainer.style.display = 'block';
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 600; 
+      const MAX_HEIGHT = 600; 
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+      } else {
+        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      selectedImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+      imagePreview.src = selectedImageBase64;
+      previewContainer.style.display = 'block';
+    };
+    img.src = event.target.result;
   };
   reader.readAsDataURL(file);
 });
@@ -39,12 +54,10 @@ cancelImageBtn.addEventListener('click', () => {
   previewContainer.style.display = 'none';
 });
 
-// --- FUNGSI CHAT ---
 function addMessage(content, sender, imageBase64 = null) {
   const msgDiv = document.createElement('div');
   msgDiv.classList.add('message', sender);
   
-  // Jika ada gambar, tampilkan di atas teks
   if (imageBase64) {
     const img = document.createElement('img');
     img.src = imageBase64;
@@ -89,16 +102,14 @@ function addCopyButtons(container) {
 
 async function sendMessage() {
   const text = userInput.value.trim();
-  if (!text && !selectedImageBase64) return; // Boleh kosong jika ada gambar
+  if (!text && !selectedImageBase64) return;
 
   const currentImage = selectedImageBase64;
   
-  // 1. Tampilkan pesan user
   addMessage(text, 'user', currentImage);
   userInput.value = '';
-  cancelImageBtn.click(); // Reset gambar
+  cancelImageBtn.click(); 
   
-  // 2. Format pesan untuk backend (OpenAI Vision Format)
   let userContent;
   if (currentImage) {
     userContent = [
@@ -128,9 +139,24 @@ async function sendMessage() {
       body: JSON.stringify({ messages: conversationHistory }),
     });
 
+    // --- PERBAIKAN: SAFE PARSING ---
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Gagal terhubung ke server');
+      let errorMessage = 'Gagal terhubung ke server.';
+      const contentType = response.headers.get("content-type");
+      
+      // Jika server membalas dengan JSON yang benar
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          const errData = await response.json();
+          errorMessage = errData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `Server Error (${response.status}).`;
+        }
+      } else {
+        // Jika server crash dan mengirim HTML (bukan JSON)
+        errorMessage = `⚠️ Server Vercel Crash atau Timeout (${response.status}). Coba beberapa saat lagi.`;
+      }
+      throw new Error(errorMessage);
     }
 
     const reader = response.body.getReader();
