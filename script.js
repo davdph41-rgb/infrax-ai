@@ -3,18 +3,27 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 let conversationHistory = [];
 
+// Konfigurasi Marked.js (Parsing Markdown)
+marked.setOptions({
+  highlight: function (code, lang) {
+    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+    return hljs.highlight(code, { language }).value;
+  },
+  breaks: true // Agar enter di chat jadi <br>
+});
+
 // Fungsi menambah pesan ke layar
-function addMessage(text, sender) {
+function addMessage(content, sender) {
   const msgDiv = document.createElement('div');
   msgDiv.classList.add('message', sender);
   
   if (sender === 'bot') {
-    // Jika bot, kita buat <span> untuk menampung teks streaming
     const textSpan = document.createElement('span');
-    textSpan.textContent = text;
+    textSpan.className = 'markdown-body';
+    textSpan.innerHTML = marked.parse(content);
     msgDiv.appendChild(textSpan);
   } else {
-    msgDiv.textContent = text;
+    msgDiv.textContent = content;
   }
   
   chatBox.appendChild(msgDiv);
@@ -22,23 +31,45 @@ function addMessage(text, sender) {
   return msgDiv;
 }
 
+// Fungsi menyisipkan tombol "Salin" ke setiap blok kode
+function addCopyButtons(container) {
+  const preElements = container.querySelectorAll('pre');
+  
+  preElements.forEach(pre => {
+    // Cek jika tombol belum ada
+    if (!pre.querySelector('.copy-btn')) {
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.innerHTML = '<i class="fas fa-copy"></i> Salin';
+      
+      btn.addEventListener('click', () => {
+        const code = pre.querySelector('code').innerText;
+        navigator.clipboard.writeText(code).then(() => {
+          btn.innerHTML = '<i class="fas fa-check"></i> Tersalin!';
+          setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Salin'; }, 2000);
+        });
+      });
+      
+      pre.appendChild(btn);
+    }
+  });
+}
+
 async function sendMessage() {
   const text = userInput.value.trim();
   if (!text) return;
 
-  // 1. Tampilkan pesan user
   addMessage(text, 'user');
   userInput.value = '';
   conversationHistory.push({ role: 'user', content: text });
 
-  // 2. Nonaktifkan tombol & siapkan gelembung chat bot
   sendBtn.disabled = true;
   userInput.disabled = true;
   
+  // Siapkan pesan bot kosong
   const botMsgDiv = addMessage('', 'bot');
-  const textSpan = botMsgDiv.querySelector('span');
+  const textSpan = botMsgDiv.querySelector('.markdown-body');
   
-  // Tambahkan kursor berkedip sebagai indikator AI sedang mengetik
   const cursor = document.createElement('span');
   cursor.classList.add('typing-cursor');
   botMsgDiv.appendChild(cursor);
@@ -55,7 +86,6 @@ async function sendMessage() {
       throw new Error(err.error || 'Gagal terhubung ke server');
     }
 
-    // 3. Baca Data Stream (Server-Sent Events)
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let done = false;
@@ -70,7 +100,6 @@ async function sendMessage() {
         const lines = chunk.split('\n');
         
         for (const line of lines) {
-          // Format SSE (Server-Sent Events) dari OpenAI/Gemini
           if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
             try {
               const data = JSON.parse(line.substring(6));
@@ -78,36 +107,34 @@ async function sendMessage() {
               
               if (content) {
                 fullText += content;
-                textSpan.textContent = fullText; // Update teks secara real-time
-                chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll ke bawah
+                // Ubah teks mentah menjadi HTML cantik secara real-time
+                textSpan.innerHTML = marked.parse(fullText); 
+                chatBox.scrollTop = chatBox.scrollHeight;
               }
-            } catch (e) {
-              // Abaikan error jika potongan JSON belum lengkap
-            }
+            } catch (e) {}
           }
         }
       }
     }
 
-    // Hapus kursor setelah jawaban selesai
+    // Setelah selesai, hapus kursor, warnai kode, & tambahkan tombol Salin
     botMsgDiv.removeChild(cursor);
+    textSpan.innerHTML = marked.parse(fullText);
+    addCopyButtons(textSpan);
+    
     conversationHistory.push({ role: 'assistant', content: fullText });
 
   } catch (error) {
-    // Jika error, hapus kursor dan tampilkan pesan error warna merah
     if (botMsgDiv.contains(cursor)) botMsgDiv.removeChild(cursor);
-    textSpan.textContent = error.message;
-    textSpan.style.color = '#d9534f';
-    conversationHistory.pop(); // Hapus history user jika gagal
+    textSpan.innerHTML = `<span style="color: #d9534f;">${error.message}</span>`;
+    conversationHistory.pop();
   } finally {
-    // Aktifkan kembali input
     sendBtn.disabled = false;
     userInput.disabled = false;
     userInput.focus();
   }
 }
 
-// Event Listener
 sendBtn.addEventListener('click', sendMessage);
 userInput.addEventListener('keypress', (e) => { 
   if (e.key === 'Enter') sendMessage(); 
