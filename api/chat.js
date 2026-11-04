@@ -14,10 +14,33 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Format messages salah' }), { status: 400 });
     }
 
-    // Cek apakah pesan terakhir mengandung gambar
-    const lastMessage = messages[messages.length - 1];
-    const hasImage = Array.isArray(lastMessage.content) && 
-                     lastMessage.content.some(item => item.type === 'image_url');
+    const lastMessageObj = messages[messages.length - 1];
+    let lastText = "";
+    
+    // AMBIL TEKS DENGAN AMAN (Mendukung teks biasa maupun teks+gambar)
+    if (typeof lastMessageObj.content === 'string') {
+      lastText = lastMessageObj.content.toLowerCase();
+    } else if (Array.isArray(lastMessageObj.content)) {
+      // Jika bentuknya array (teks + gambar), cari bagian teksnya saja
+      const textPart = lastMessageObj.content.find(c => c.type === 'text');
+      if (textPart && textPart.text) {
+        lastText = textPart.text.toLowerCase();
+      }
+    }
+
+    // ==========================================
+    // FITUR TES MANUAL (Magic Commands)
+    // ==========================================
+    let forcedProvider = null;
+    if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
+    else if (lastText.includes('!groq')) forcedProvider = 'Groq';
+    else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
+
+    // ==========================================
+    // DETEKSI GAMBAR
+    // ==========================================
+    const hasImage = Array.isArray(lastMessageObj.content) && 
+                     lastMessageObj.content.some(item => item.type === 'image_url');
 
     const systemMessage = {
       role: 'system',
@@ -28,6 +51,7 @@ export default async function handler(req) {
 
     const messagesWithSystem = [systemMessage, ...messages];
 
+    // Daftar Provider
     let providers = [
       {
         name: 'OpenAI',
@@ -49,7 +73,12 @@ export default async function handler(req) {
       }
     ];
 
-    // JIKA ADA GAMBAR: Hapus Groq dari daftar karena tidak mendukung gambar
+    // 1. Saring jika ada Magic Command (!openai, dll)
+    if (forcedProvider) {
+      providers = providers.filter(p => p.name === forcedProvider);
+    }
+
+    // 2. Saring jika ada Gambar (Hapus Groq karena tidak mendukung gambar)
     if (hasImage) {
       console.log("[Info] Gambar terdeteksi. Melewati Groq.");
       providers = providers.filter(p => p.name !== 'Groq');
@@ -93,7 +122,7 @@ export default async function handler(req) {
     }
 
     return new Response(JSON.stringify({ 
-      error: '⚠️ Semua server AI yang mendukung gambar sedang sibuk. Coba lagi nanti.' 
+      error: `⚠️ ${forcedProvider ? `Server ${forcedProvider} error/limit.` : 'Semua server AI sedang sibuk.'} Coba lagi nanti.` 
     }), { status: 503 });
 
   } catch (error) {
