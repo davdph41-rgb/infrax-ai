@@ -18,13 +18,17 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'API Key belum diset' }), { status: 500 });
     }
 
-    // SISIPKAN SYSTEM PROMPT AGAR AI PATUH PADA FORMAT
+    // SYSTEM PROMPT YANG LEBIH KETAT
     const systemMessage = {
       role: 'system',
-      content: 'Anda adalah asisten AI yang cerdas. Setiap kali Anda memberikan kode program (HTML, CSS, JS, Python, dll), Anda WAJIB membungkusnya dengan blok markdown (tiga backtick) beserta nama bahasanya. Contoh: ```css .kelas { color: red; } ```. Jangan pernah mencampur kode ke dalam teks paragraf biasa.'
+      content: `Anda adalah asisten pemrograman profesional. 
+      ATURAN MUTLAK:
+      1. Setiap kali memberikan kode (HTML, CSS, JS, dll), WAJIB dibungkus dengan tiga backtick (contoh: \`\`\`html ... \`\`\`).
+      2. JANGAN PERNAH mencampur kode HTML dan CSS di dalam satu blok yang sama. Jika memberikan HTML dan CSS, tutup blok HTML terlebih dahulu, lalu buka blok CSS baru.
+      3. JANGAN PERNAH memotong kode di tengah jalan. Pastikan setiap blok kode memiliki pembuka dan penutup yang lengkap.
+      4. Jangan menulis kode di luar blok markdown.`
     };
     
-    // Gabungkan system prompt dengan riwayat chat
     const messagesWithSystem = [systemMessage, ...messages];
 
     const endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
@@ -42,7 +46,7 @@ export default async function handler(req) {
         },
         body: JSON.stringify({
           model: model,
-          messages: messagesWithSystem, // Gunakan pesan yang sudah ditambah system prompt
+          messages: messagesWithSystem,
           stream: true,
         }),
       });
