@@ -16,48 +16,74 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Format request salah. Field "messages" wajib berupa array.' });
     }
 
-    // 1. Ambil API Key dari Environment Variable Vercel
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'API Key belum diset. Tambahkan GEMINI_API_KEY di pengaturan Vercel.' });
     }
 
-    // 2. Tembak API Gemini (Endpoint kompatibel OpenAI)
-    const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        // Kamu bisa mengganti model sesuai kebutuhan
-        // Rekomendasi: 'gemini-3.8-flash' (terbaru & cepat) atau 'gemini-3.5-flash-lite' (kuota lebih hemat)
-        model: 'gemini-3.8-flash', 
-        messages: messages,
-        stream: false,
-      }),
-    });
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+    
+    // Konfigurasi Model (bisa diganti ke 'gemini-3.5-flash-lite' jika masih sering 503)
+    const modelName = 'gemini-3.8-flash'; 
 
-    // 3. Baca respons dari Gemini
-    const data = await geminiResponse.json().catch(() => ({}));
+    // Fungsi untuk melakukan request ke Gemini
+    const fetchGemini = async () => {
+      return await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: messages,
+          stream: false,
+        }),
+      });
+    };
 
-    // 4. Penanganan Error
-    if (!geminiResponse.ok) {
-      // Jika error 429 (Rate Limit / Kuota Habis)
-      if (geminiResponse.status === 429) {
+    // Strategi Exponential Backoff (Coba ulang jika Error 503 atau 429)
+    let response;
+    let retries = 4; // Maksimal 4 kali percobaan
+    let delay = 1000; // Jeda awal 1 detik
+
+    for (let i = 0; i < retries; i++) {
+      response = await fetchGemini();
+
+      // Jika berhasil (200) atau error yang bukan karena server sibuk (misal 400/401), hentikan loop
+      if (response.ok || (response.status !== 503 && response.status !== 429)) {
+        break;
+      }
+
+      // Jika masih ada sisa percobaan, tunggu sebentar lalu coba lagi
+      if (i < retries - 1) {
+        console.log(`Server sibuk (Status: ${response.status}). Mencoba lagi dalam ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Jeda menjadi 2 detik, 4 detik, 8 detik
+      }
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    // Jika setelah 4 kali percobaan masih gagal
+    if (!response.ok) {
+      if (response.status === 503) {
+        return res.status(503).json({
+          error: '⚠️ Server Gemini sedang kelebihan beban. Silakan coba lagi beberapa saat lagi.',
+        });
+      }
+      if (response.status === 429) {
         return res.status(429).json({
-          error: '⚠️ Kuota gratis Gemini sedang habis atau terlalu banyak permintaan. Silakan tunggu sebentar.',
+          error: '⚠️ Kuota gratis Gemini sedang habis atau terlalu banyak permintaan.',
         });
       }
       
-      // Jika error lainnya
-      return res.status(geminiResponse.status).json({
-        error: `⚠️ Gagal memproses (Kode: ${geminiResponse.status}).`,
+      return res.status(response.status).json({
+        error: `⚠️ Gagal memproses (Kode: ${response.status}).`,
         details: data,
       });
     }
 
-    // 5. Kirim balik jawaban ke frontend
     return res.status(200).json(data);
 
   } catch (error) {
