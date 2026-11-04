@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentChatId = null;
   let selectedImageBase64 = null;
   let allChats = []; 
+  let currentChatHistory = []; // MENYIMPAN RIWAYAT OBROLAN AKTIF
 
   marked.setOptions({ breaks: true });
 
@@ -32,14 +33,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       allChats = await res.json();
       renderHistory();
-      return true; // Berhasil
+      return true;
     } catch (e) { 
       console.error(e);
       chatBox.innerHTML = `<div style="color: red; padding: 15px; background: #ffe6e6; border-radius: 8px; margin: 10px;">
-        ⚠️ <b>Gagal Memuat Database:</b><br>${e.message}<br><br>
-        <i>Pastikan tabel Neon sudah dibuat dan URL Database benar.</i>
+        ⚠️ <b>Gagal Memuat Database:</b><br>${e.message}
       </div>`;
-      return false; // Gagal
+      return false;
     }
   }
 
@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       currentChatId = id;
+      currentChatHistory = []; // Reset riwayat untuk obrolan baru
       chatBox.innerHTML = '';
       addMessage('Halo! Ada yang bisa dibantu?', 'bot', 'System');
       await fetchChats(); 
@@ -88,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadChat(id) {
     currentChatId = id;
     chatBox.innerHTML = '';
+    currentChatHistory = []; // Kosongkan dulu sebelum memuat
     
     try {
       const res = await fetch(`/api/history?chatId=${id}`);
@@ -95,17 +97,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const errData = await res.json();
         throw new Error(errData.error || 'Gagal memuat pesan');
       }
+      
       const messages = await res.json();
+      currentChatHistory = messages; // Simpan ke variabel agar bisa dikirim ke AI nanti
       
       if (messages.length === 0) {
         addMessage('Halo! Ada yang bisa dibantu?', 'bot', 'System');
       } else {
         messages.forEach(msg => {
+          // Gambar tidak dimuat ulang di history untuk menghemat memori, tapi teksnya dimuat
           addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot', msg.sender_name, null);
         });
       }
     } catch (e) {
-      // MENAMPILKAN ERROR ASLI DI LAYAR CHAT
       chatBox.innerHTML = `<div style="color: red; padding: 15px; background: #ffe6e6; border-radius: 8px;">
         ⚠️ <b>Error Database:</b><br>${e.message}
       </div>`;
@@ -195,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { type: "image_url", image_url: { url: currentImage } }
     ] : text;
 
-    // Simpan pesan user ke DB
+    // 1. Simpan pesan user ke DB
     await fetch('/api/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -203,6 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'addMessage', chatId: currentChatId, role: 'user', content: text, senderName: 'You'
       })
     });
+
+    // 2. Masukkan pesan user terbaru ke riwayat aktif
+    currentChatHistory.push({ role: 'user', content: userContent });
 
     const currentChat = allChats.find(c => c.id === currentChatId);
     if (currentChat && currentChat.title === 'Obrolan Baru' && text) {
@@ -230,10 +237,14 @@ document.addEventListener('DOMContentLoaded', () => {
     botMsgDiv.appendChild(cursor);
 
     try {
+      // KITA AMBIL 15 PESAN TERAKHIR SAJA agar tidak melebihi batas maksimal API (Token Limit)
+      const recentHistory = currentChatHistory.slice(-15);
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: userContent }] }),
+        // KIRIM SELURUH RIWAYAT (recentHistory) KE BACKEND, BUKAN HANYA 1 PESAN
+        body: JSON.stringify({ messages: recentHistory }),
       });
 
       if (!response.ok) {
@@ -257,13 +268,18 @@ document.addEventListener('DOMContentLoaded', () => {
         textSpan.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
         addCopyButtons(textSpan);
         
+        // Simpan balasan AI ke DB
         await fetch('/api/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'addMessage', chatId: currentChatId, role: 'assistant', content: botReply, senderName: aiName })
         });
+        
+        // Masukkan balasan AI ke riwayat aktif di memori
+        currentChatHistory.push({ role: 'assistant', content: botReply });
 
       } else {
+        // Fallback untuk streaming (Vercel)
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let done = false, fullText = '', buffer = '';
@@ -301,11 +317,14 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'addMessage', chatId: currentChatId, role: 'assistant', content: fullText, senderName: aiName })
         });
+        
+        currentChatHistory.push({ role: 'assistant', content: fullText });
       }
 
     } catch (error) {
       if (botMsgDiv.contains(cursor)) botMsgDiv.removeChild(cursor);
       textSpan.innerHTML = `<span style="color: #d9534f;">${error.message}</span>`;
+      currentChatHistory.pop(); // Batalkan penyimpanan pesan user jika error
     } finally {
       sendBtn.disabled = false;
       userInput.disabled = false;
