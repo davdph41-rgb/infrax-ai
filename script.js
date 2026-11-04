@@ -1,3 +1,12 @@
+// Daftarkan fungsi ke window agar bisa dipanggil dari HTML
+window.toggleSidebar = function() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  if (sidebar) sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('open');
+};
+
+// Sisa logika aplikasi
 document.addEventListener('DOMContentLoaded', () => {
   const chatBox = document.getElementById('chat-box');
   const userInput = document.getElementById('user-input');
@@ -7,21 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewContainer = document.getElementById('image-preview-container');
   const imagePreview = document.getElementById('image-preview');
   const cancelImageBtn = document.getElementById('cancel-image-btn');
-
-  // Elemen UI Sidebar
-  const menuBtn = document.getElementById('menu-btn');
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('overlay');
-  const newChatBtn = document.getElementById('new-chat-btn');
   const historyList = document.getElementById('chat-history-list');
 
-  // State Aplikasi (Dengan pelindung agar tidak crash jika data rusak)
   let allChats = {};
   try {
     const savedChats = localStorage.getItem('nexus_chats');
     if (savedChats) allChats = JSON.parse(savedChats);
   } catch (e) {
-    console.error("Data riwayat rusak, mereset...");
     localStorage.removeItem('nexus_chats');
   }
 
@@ -30,22 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   marked.setOptions({ breaks: true });
 
-  // --- LOGIKA SIDEBAR ---
-  function toggleSidebar() {
-    sidebar.classList.toggle('open');
-    overlay.classList.toggle('open');
-  }
-  
-  if (menuBtn) menuBtn.addEventListener('click', toggleSidebar);
-  if (overlay) overlay.addEventListener('click', toggleSidebar);
-
   function saveToStorage() {
     localStorage.setItem('nexus_chats', JSON.stringify(allChats));
     localStorage.setItem('nexus_current_chat_id', currentChatId);
   }
 
-  // --- LOGIKA RIWAYAT & TAB ---
   function renderHistory() {
+    if (!historyList) return;
     historyList.innerHTML = '';
     const sortedChats = Object.values(allChats).sort((a, b) => b.timestamp - a.timestamp);
     
@@ -58,7 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function createNewChat() {
+  // Daftarkan fungsi ke window agar bisa dipanggil dari HTML
+  window.createNewChat = function() {
     const id = Date.now().toString();
     allChats[id] = { id: id, title: 'Obrolan Baru', messages: [], timestamp: Date.now() };
     currentChatId = id;
@@ -67,8 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     chatBox.innerHTML = '';
     addMessage('Halo! Ada topik baru yang ingin dibahas?', 'bot', 'System');
-    if (window.innerWidth < 768) toggleSidebar();
-  }
+    
+    // Tutup sidebar jika di HP
+    if (window.innerWidth < 768) {
+      window.toggleSidebar();
+    }
+  };
 
   function loadChat(id) {
     currentChatId = id;
@@ -82,12 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     renderHistory();
-    if (window.innerWidth < 768) toggleSidebar();
+    if (window.innerWidth < 768) {
+      window.toggleSidebar();
+    }
   }
 
-  if (newChatBtn) newChatBtn.addEventListener('click', createNewChat);
-
-  // --- LOGIKA UPLOAD GAMBAR ---
   if (uploadBtn) uploadBtn.addEventListener('click', () => imageInput.click());
   
   if (imageInput) {
@@ -121,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- FUNGSI CHAT & TAMPILAN NAMA ---
   function addMessage(content, sender, senderName, imageBase64 = null) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', sender);
@@ -129,7 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (senderName) {
       const nameDiv = document.createElement('div');
       nameDiv.classList.add('sender-name');
-      // Paksa gaya inline agar dijamin muncul
       nameDiv.style.fontSize = '11px';
       nameDiv.style.fontWeight = 'bold';
       nameDiv.style.marginBottom = '4px';
@@ -170,11 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!text && !selectedImageBase64) return;
 
     if (!currentChatId || !allChats[currentChatId]) {
-      createNewChat();
+      window.createNewChat();
     }
 
     const currentImage = selectedImageBase64;
-    
     addMessage(text, 'user', 'You', currentImage);
     
     let userContent = currentImage ? [
@@ -286,10 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sendBtn) sendBtn.addEventListener('click', sendMessage);
   if (userInput) userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-  // INISIALISASI
+  // Inisialisasi awal
   if (currentChatId && allChats[currentChatId]) {
     loadChat(currentChatId);
   } else {
-    createNewChat();
+    window.createNewChat();
   }
 });
