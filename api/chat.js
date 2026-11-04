@@ -1,15 +1,12 @@
 exports.handler = async function(event, context) {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
-  }
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
 
   try {
     const body = JSON.parse(event.body);
     let messages = body?.messages;
+    let customPrompt = body?.systemPrompt || ''; // <-- TANGKAP KEPRIBADIAN DARI FRONTEND
 
-    if (!messages || !Array.isArray(messages)) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Format messages salah' }) };
-    }
+    if (!messages || !Array.isArray(messages)) return { statusCode: 400, body: JSON.stringify({ error: 'Format messages salah' }) };
 
     const lastMessageObj = messages[messages.length - 1];
     let lastText = typeof lastMessageObj.content === 'string' ? lastMessageObj.content.toLowerCase() : 
@@ -22,24 +19,18 @@ exports.handler = async function(event, context) {
 
     const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
     
+    // GABUNGKAN PROMPT BAWAAN DENGAN PROMPT DARI USER
+    const basePrompt = `Anda adalah asisten AI yang ramah. ATURAN MUTLAK:
+      1. JIKA Anda memberikan kode pemrograman, WAJIB bungkus dengan blok markdown tiga backtick.
+      2. JANGAN PERNAH membungkus teks obrolan biasa ke dalam blok kode.
+      3. JANGAN memotong kode.`;
+    
     const sysMsg = { 
       role: 'system', 
-      content: `Anda adalah asisten AI yang ramah. ATURAN MUTLAK:
-      1. JIKA Anda memberikan kode pemrograman (HTML, CSS, JS, Python, dll), WAJIB bungkus dengan blok markdown tiga backtick (contoh: \`\`\`html ... \`\`\`).
-      2. JANGAN PERNAH membungkus teks obrolan biasa, sapaan, atau penjelasan non-kode ke dalam blok kode. Jawab obrolan biasa dengan teks biasa (plain text).
-      3. JANGAN memotong kode.` 
+      content: customPrompt ? `${basePrompt}\n\nKEPRIBADIAN TAMBAHAN DARI USER:\n${customPrompt}` : basePrompt
     };
-
-    // --- PERBAIKAN DI SINI ---
-    // Menyaring setiap pesan agar HANYA berisi 'role' dan 'content'
-    const cleanMessages = messages.map(msg => {
-      return {
-        role: msg.role,
-        content: msg.content
-      };
-    });
     
-    // Gabungkan system prompt dengan pesan yang sudah bersih
+    const cleanMessages = messages.map(msg => ({ role: msg.role, content: msg.content }));
     const finalMessages = [sysMsg, ...cleanMessages];
 
     const allProviders = [
@@ -57,7 +48,6 @@ exports.handler = async function(event, context) {
 
     for (const p of active) {
       if (!p.apiKey) continue;
-      
       try {
         const res = await fetch(p.endpoint, {
           method: 'POST',
@@ -76,11 +66,8 @@ exports.handler = async function(event, context) {
           const errData = await res.json().catch(() => ({}));
           lastErrorMsg = `${p.name} Error: ${res.status} ${errData.error?.message ? '- ' + errData.error.message : ''}`;
         }
-      } catch (e) { 
-        lastErrorMsg = `${p.name} Jaringan Error.`; 
-      }
+      } catch (e) { lastErrorMsg = `${p.name} Jaringan Error.`; }
     }
-
     return { statusCode: 503, body: JSON.stringify({ error: lastErrorMsg }) };
 
   } catch (error) {
