@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
 
     // Base URL bisa diatur lewat Environment Variable.
     // Default mengikuti base URL yang umum dipakai InferX.
-    const baseUrl = process.env.INFERX_BASE_URL || 'https://model.inferx.net/endpoints/v1';
+    const baseUrl = process.env.INFERX_BASE_URL || 'https://model.inferx.net/v1';
     const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
 
     const inferxResponse = await fetch(endpoint, {
