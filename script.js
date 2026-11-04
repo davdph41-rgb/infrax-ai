@@ -139,22 +139,13 @@ async function sendMessage() {
       body: JSON.stringify({ messages: conversationHistory }),
     });
 
-    // --- PERBAIKAN: SAFE PARSING ---
     if (!response.ok) {
       let errorMessage = 'Gagal terhubung ke server.';
       const contentType = response.headers.get("content-type");
-      
-      // Jika server membalas dengan JSON yang benar
       if (contentType && contentType.includes("application/json")) {
-        try {
-          const errData = await response.json();
-          errorMessage = errData.error || errorMessage;
-        } catch (e) {
-          errorMessage = `Server Error (${response.status}).`;
-        }
+        try { const errData = await response.json(); errorMessage = errData.error || errorMessage; } catch (e) {}
       } else {
-        // Jika server crash dan mengirim HTML (bukan JSON)
-        errorMessage = `⚠️ Server Vercel Crash atau Timeout (${response.status}). Coba beberapa saat lagi.`;
+        errorMessage = `⚠️ Server Error (${response.status}).`;
       }
       throw new Error(errorMessage);
     }
@@ -163,15 +154,20 @@ async function sendMessage() {
     const decoder = new TextDecoder('utf-8');
     let done = false;
     let fullText = '';
+    let buffer = ''; // <-- SISTEM BUFFER BARU
 
     while (!done) {
       const { value, done: readerDone } = await reader.read();
       done = readerDone;
       
       if (value) {
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        // Tambahkan potongan baru ke buffer
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
         
+        // Simpan baris terakhir (yang mungkin belum lengkap) kembali ke buffer
+        buffer = lines.pop(); 
+
         for (const line of lines) {
           if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
             try {
@@ -183,10 +179,22 @@ async function sendMessage() {
                 textSpan.innerHTML = marked.parse(fullText); 
                 chatBox.scrollTop = chatBox.scrollHeight;
               }
-            } catch (e) {}
+            } catch (e) {
+              // Abaikan error parsing jika JSON belum lengkap
+            }
           }
         }
       }
+    }
+
+    // Proses sisa buffer jika ada
+    if (buffer.startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
+        try {
+            const data = JSON.parse(buffer.substring(6));
+            if (data.choices[0]?.delta?.content) {
+                fullText += data.choices[0].delta.content;
+            }
+        } catch(e) {}
     }
 
     botMsgDiv.removeChild(cursor);
