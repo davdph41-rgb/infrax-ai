@@ -4,10 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Nexus AI</title>
-  
-  <!-- Tema warna untuk blok kode (Atom One Dark) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-  <!-- FontAwesome untuk ikon -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -27,13 +24,23 @@
       <!-- Pesan akan muncul di sini -->
     </div>
     
+    <!-- Area Input yang Diperbarui -->
     <div class="input-area">
-      <input type="text" id="user-input" placeholder="Ketik pesan..." autocomplete="off">
-      <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
+      <!-- Pratinjau Gambar (Tersembunyi secara default) -->
+      <div id="image-preview-container" class="image-preview-container" style="display: none;">
+        <img id="image-preview" src="" alt="Preview">
+        <button id="cancel-image-btn" class="cancel-image-btn"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div class="input-controls">
+        <input type="file" id="image-input" accept="image/*" hidden>
+        <button id="upload-btn" class="upload-btn" title="Unggah Gambar"><i class="fas fa-image"></i></button>
+        <input type="text" id="user-input" placeholder="Ketik pesan..." autocomplete="off">
+        <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
+      </div>
     </div>
   </div>
 
-  <!-- Library untuk Parsing Markdown & Syntax Highlighting -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="script.js"></script>
