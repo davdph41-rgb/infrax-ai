@@ -1,0 +1,23 @@
+{
+  "name": "Nexus AI",
+  "short_name": "Nexus AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efeae2",
+  "theme_color": "#075e54",
+  "description": "Asisten AI Multi-Model buatan sendiri.",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/bottts/png?seed=Nexus&backgroundColor=ffffff&size=192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://api.dicebear.com/7.x/bottts/png?seed=Nexus&backgroundColor=ffffff&size=512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
