@@ -6,6 +6,7 @@
   "background_color": "#efeae2",
   "theme_color": "#075e54",
   "description": "Asisten AI Multi-Model buatan sendiri.",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "https://api.dicebear.com/7.x/bottts/png?seed=Nexus&backgroundColor=ffffff&size=192",
