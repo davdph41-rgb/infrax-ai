@@ -8,27 +8,33 @@ export default async function handler(req) {
 
   try {
     const body = await req.json();
-    const messages = body?.messages;
+    let messages = body?.messages;
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Format messages salah' }), { status: 400 });
     }
 
+    // ==========================================
+    // FITUR TES MANUAL (Magic Commands)
+    // ==========================================
+    const lastMessage = messages[messages.length - 1].content.toLowerCase();
+    let forcedProvider = null;
+
+    if (lastMessage.includes('!openai')) forcedProvider = 'OpenAI';
+    else if (lastMessage.includes('!groq')) forcedProvider = 'Groq';
+    else if (lastMessage.includes('!gemini')) forcedProvider = 'Gemini';
+
     const systemMessage = {
       role: 'system',
       content: `Anda adalah asisten AI. ATURAN WAJIB:
-      1. Jika memberikan kode, SELALU bungkus dengan blok markdown tiga backtick (contoh: \`\`\`html ... \`\`\`).
-      2. JANGAN memotong kode. Pastikan kode tertutup dengan benar.
-      3. Jangan pernah menulis kode di luar blok markdown.`
+      1. Jika memberikan kode, SELALU bungkus dengan blok markdown tiga backtick.
+      2. JANGAN memotong kode.`
     };
 
     const messagesWithSystem = [systemMessage, ...messages];
 
-    // ==========================================
-    // SISTEM FALLBACK BERLAPIS
-    // URUTAN: 1. OpenAI -> 2. Groq -> 3. Gemini
-    // ==========================================
-    const providers = [
+    // Daftar Provider Asli
+    let providers = [
       {
         name: 'OpenAI',
         endpoint: 'https://api.openai.com/v1/chat/completions',
@@ -49,10 +55,14 @@ export default async function handler(req) {
       }
     ];
 
+    // Jika ada perintah khusus (misal: !groq), saring hanya provider tersebut
+    if (forcedProvider) {
+      providers = providers.filter(p => p.name === forcedProvider);
+    }
+
     for (const provider of providers) {
-      // Lewati jika API Key tidak ditemukan di Vercel
       if (!provider.apiKey) {
-        console.log(`[SKIP] API Key untuk ${provider.name} tidak ditemukan.`);
+        console.log(`[SKIP] API Key ${provider.name} kosong.`);
         continue; 
       }
 
@@ -73,9 +83,8 @@ export default async function handler(req) {
           }),
         });
 
-        // Jika sukses, langsung kirim respons ke layar chat
         if (response.ok) {
-          console.log(`[Sukses] Berhasil terhubung ke ${provider.name}.`);
+          console.log(`[Sukses] ${provider.name} menjawab.`);
           return new Response(response.body, {
             headers: {
               'Content-Type': 'text/event-stream; charset=utf-8',
@@ -85,16 +94,15 @@ export default async function handler(req) {
           });
         }
 
-        console.error(`[Gagal] ${provider.name} merespons dengan kode: ${response.status}. Beralih ke penyedia berikutnya...`);
+        console.error(`[Gagal] ${provider.name} Error: ${response.status}`);
         
       } catch (error) {
-        console.error(`[Error Jaringan] Gagal menghubungi ${provider.name}:`, error.message);
+        console.error(`[Error Jaringan] ${provider.name}:`, error.message);
       }
     }
 
-    // Jika ketiga-tiganya gagal
     return new Response(JSON.stringify({ 
-      error: '⚠️ Semua server AI (OpenAI, Groq, Gemini) sedang sibuk atau limit. Silakan coba beberapa saat lagi.' 
+      error: `⚠️ ${forcedProvider ? `Server ${forcedProvider} sedang error/limit.` : 'Semua server AI sibuk.'} Silakan coba lagi.` 
     }), { status: 503 });
 
   } catch (error) {
