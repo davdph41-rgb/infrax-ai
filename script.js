@@ -1,25 +1,68 @@
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
-let conversationHistory = [];
+const uploadBtn = document.getElementById('upload-btn');
+const imageInput = document.getElementById('image-input');
+const previewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const cancelImageBtn = document.getElementById('cancel-image-btn');
 
-// Matikan pewarnaan otomatis saat streaming untuk mencegah error
-marked.setOptions({
-  breaks: true 
+let conversationHistory = [];
+let selectedImageBase64 = null;
+
+marked.setOptions({ breaks: true });
+
+// --- LOGIKA UPLOAD GAMBAR ---
+uploadBtn.addEventListener('click', () => imageInput.click());
+
+imageInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 3 * 1024 * 1024) { // Maksimal 3MB
+    alert("Ukuran gambar terlalu besar. Maksimal 3MB.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    selectedImageBase64 = event.target.result;
+    imagePreview.src = selectedImageBase64;
+    previewContainer.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
 });
 
-// Fungsi menambah pesan ke layar
-function addMessage(content, sender) {
+cancelImageBtn.addEventListener('click', () => {
+  selectedImageBase64 = null;
+  imageInput.value = '';
+  previewContainer.style.display = 'none';
+});
+
+// --- FUNGSI CHAT ---
+function addMessage(content, sender, imageBase64 = null) {
   const msgDiv = document.createElement('div');
   msgDiv.classList.add('message', sender);
   
+  // Jika ada gambar, tampilkan di atas teks
+  if (imageBase64) {
+    const img = document.createElement('img');
+    img.src = imageBase64;
+    img.classList.add('chat-image');
+    msgDiv.appendChild(img);
+  }
+
   if (sender === 'bot') {
     const textSpan = document.createElement('span');
     textSpan.className = 'markdown-body';
     textSpan.innerHTML = marked.parse(content);
     msgDiv.appendChild(textSpan);
   } else {
-    msgDiv.textContent = content;
+    if (content) {
+      const textNode = document.createElement('span');
+      textNode.textContent = content;
+      msgDiv.appendChild(textNode);
+    }
   }
   
   chatBox.appendChild(msgDiv);
@@ -27,24 +70,18 @@ function addMessage(content, sender) {
   return msgDiv;
 }
 
-// Fungsi menyisipkan tombol "Salin" ke setiap blok kode
 function addCopyButtons(container) {
-  const preElements = container.querySelectorAll('pre');
-  
-  preElements.forEach(pre => {
+  container.querySelectorAll('pre').forEach(pre => {
     if (!pre.querySelector('.copy-btn')) {
       const btn = document.createElement('button');
       btn.className = 'copy-btn';
       btn.innerHTML = '<i class="fas fa-copy"></i> Salin';
-      
       btn.addEventListener('click', () => {
-        const code = pre.querySelector('code').innerText;
-        navigator.clipboard.writeText(code).then(() => {
+        navigator.clipboard.writeText(pre.querySelector('code').innerText).then(() => {
           btn.innerHTML = '<i class="fas fa-check"></i> Tersalin!';
           setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Salin'; }, 2000);
         });
       });
-      
       pre.appendChild(btn);
     }
   });
@@ -52,11 +89,27 @@ function addCopyButtons(container) {
 
 async function sendMessage() {
   const text = userInput.value.trim();
-  if (!text) return;
+  if (!text && !selectedImageBase64) return; // Boleh kosong jika ada gambar
 
-  addMessage(text, 'user');
+  const currentImage = selectedImageBase64;
+  
+  // 1. Tampilkan pesan user
+  addMessage(text, 'user', currentImage);
   userInput.value = '';
-  conversationHistory.push({ role: 'user', content: text });
+  cancelImageBtn.click(); // Reset gambar
+  
+  // 2. Format pesan untuk backend (OpenAI Vision Format)
+  let userContent;
+  if (currentImage) {
+    userContent = [
+      { type: "text", text: text || "Tolong jelaskan gambar ini." },
+      { type: "image_url", image_url: { url: currentImage } }
+    ];
+  } else {
+    userContent = text;
+  }
+  
+  conversationHistory.push({ role: 'user', content: userContent });
 
   sendBtn.disabled = true;
   userInput.disabled = true;
@@ -101,7 +154,6 @@ async function sendMessage() {
               
               if (content) {
                 fullText += content;
-                // Tampilkan teks secara mentah (tanpa pewarnaan) saat masih streaming
                 textSpan.innerHTML = marked.parse(fullText); 
                 chatBox.scrollTop = chatBox.scrollHeight;
               }
@@ -111,13 +163,9 @@ async function sendMessage() {
       }
     }
 
-    // --- STREAMING SELESAI ---
     botMsgDiv.removeChild(cursor);
-    
-    // Render ulang secara utuh, lalu berikan pewarnaan kode (highlight)
     textSpan.innerHTML = marked.parse(fullText);
     
-    // Terapkan warna-warni kode setelah teks selesai
     textSpan.querySelectorAll('pre code').forEach((block) => {
       hljs.highlightElement(block);
     });
