@@ -22,73 +22,100 @@ export default async function handler(req, res) {
     }
 
     const endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-    
-    // Konfigurasi Model (bisa diganti ke 'gemini-3.5-flash-lite' jika masih sering 503)
-    const modelName = 'gemini-3.8-flash'; 
 
-    // Fungsi untuk melakukan request ke Gemini
-    const fetchGemini = async () => {
-      return await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelName,
-          messages: messages,
-          stream: false,
-        }),
-      });
-    };
+    // DAFTAR MODEL (Fallback)
+    // Sistem akan mencoba dari atas ke bawah.
+    const modelsToTry = [
+      'gemini-3.5-flash',      // 1. Model Utama (Paling pintar)
+      'gemini-3.5-flash-lite'  // 2. Model Cadangan (Lebih ringan, kuota lebih longgar)
+    ];
 
-    // Strategi Exponential Backoff (Coba ulang jika Error 503 atau 429)
-    let response;
-    let retries = 4; // Maksimal 4 kali percobaan
-    let delay = 1000; // Jeda awal 1 detik
+    let isSuccess = false;
+    let finalData = null;
+    let lastStatus = 500;
 
-    for (let i = 0; i < retries; i++) {
-      response = await fetchGemini();
+    // Looping melalui daftar model
+    for (const currentModel of modelsToTry) {
+      console.log(`[AI] Mencoba model: ${currentModel}`);
+      
+      let response;
+      let retries = 3; // Coba 3 kali per model sebelum pindah ke model cadangan
+      let delay = 1000; // Jeda awal 1 detik
 
-      // Jika berhasil (200) atau error yang bukan karena server sibuk (misal 400/401), hentikan loop
-      if (response.ok || (response.status !== 503 && response.status !== 429)) {
-        break;
+      for (let i = 0; i < retries; i++) {
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: currentModel,
+              messages: messages,
+              stream: false,
+            }),
+          });
+
+          finalData = await response.json().catch(() => ({}));
+          lastStatus = response.status;
+
+          // Jika berhasil (200 OK)
+          if (response.ok) {
+            isSuccess = true;
+            console.log(`[AI] Sukses menggunakan model: ${currentModel}`);
+            break; // Keluar dari loop retry
+          }
+
+          // Jika Error 503 (Server sibuk) atau 429 (Rate limit)
+          if (response.status === 503 || response.status === 429) {
+            if (i < retries - 1) {
+              console.log(`[AI] ${currentModel} sibuk (${response.status}). Retry dalam ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              delay *= 2; // Jeda 1s -> 2s -> 4s
+            }
+          } else {
+            // Jika error lain (misal format salah, API key salah), jangan retry, langsung ganti model
+            break; 
+          }
+        } catch (err) {
+          console.error(`[AI] Network error pada ${currentModel}:`, err.message);
+          lastStatus = 500;
+          break; // Gagal koneksi, coba model berikutnya
+        }
       }
 
-      // Jika masih ada sisa percobaan, tunggu sebentar lalu coba lagi
-      if (i < retries - 1) {
-        console.log(`Server sibuk (Status: ${response.status}). Mencoba lagi dalam ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; // Jeda menjadi 2 detik, 4 detik, 8 detik
-      }
+      // Jika model ini berhasil, hentikan pencarian model
+      if (isSuccess) break;
+      
+      console.log(`[AI] Gagal menggunakan ${currentModel}, beralih ke model cadangan...`);
     }
 
-    const data = await response.json().catch(() => ({}));
-
-    // Jika setelah 4 kali percobaan masih gagal
-    if (!response.ok) {
-      if (response.status === 503) {
+    // Jika semua model di daftar sudah dicoba dan tetap gagal
+    if (!isSuccess) {
+      if (lastStatus === 503) {
         return res.status(503).json({
-          error: '⚠️ Server Gemini sedang kelebihan beban. Silakan coba lagi beberapa saat lagi.',
+          error: '⚠️ Semua server Gemini sedang kelebihan beban. Silakan coba lagi nanti.',
         });
       }
-      if (response.status === 429) {
+      if (lastStatus === 429) {
         return res.status(429).json({
-          error: '⚠️ Kuota gratis Gemini sedang habis atau terlalu banyak permintaan.',
+          error: '⚠️ Kuota gratis semua model Gemini sedang habis. Coba lagi besok atau buat API Key baru.',
         });
       }
       
-      return res.status(response.status).json({
-        error: `⚠️ Gagal memproses (Kode: ${response.status}).`,
-        details: data,
+      return res.status(lastStatus).json({
+        error: `⚠️ Gagal memproses (Kode: ${lastStatus}).`,
+        details: finalData,
       });
     }
 
-    return res.status(200).json(data);
+    // Jika berhasil, kirim data ke frontend
+    return res.status(200).json(finalData);
 
   } catch (error) {
     return res.status(500).json({
-      error: '⚠️ Terjadi kesalahan pada jaringan server.',
+      error: '⚠️ Terjadi kesalahan pada server.',
       details: error.message,
     });
   }
