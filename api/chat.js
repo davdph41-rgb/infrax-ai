@@ -91,13 +91,13 @@ export default async function handler(req) {
         if (response.ok) {
           console.log(`[Sukses] ${provider.name} menjawab.`);
           
-          // SUNTIKKAN HEADER X-AI-PROVIDER DI SINI
           return new Response(response.body, {
             headers: {
               'Content-Type': 'text/event-stream; charset=utf-8',
               'Cache-Control': 'no-cache, no-transform',
               'Connection': 'keep-alive',
-              'X-AI-Provider': provider.name // <-- NAMA AI DIKIRIM KE FRONTEND
+              'X-AI-Provider': provider.name,
+              'Access-Control-Expose-Headers': 'X-AI-Provider'
             },
           });
         }
