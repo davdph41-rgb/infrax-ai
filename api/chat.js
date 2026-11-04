@@ -32,7 +32,7 @@ export default async function handler(req) {
         name: 'Gemini',
         endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         apiKey: process.env.GEMINI_API_KEY,
-        model: 'gemini-3.5-flash', // Model Gemini terbaru
+        model: 'gemini-3.5-flash-lite', // Model Gemini terbaru
       }
     ];
 
