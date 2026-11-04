@@ -17,28 +17,23 @@ export default async function handler(req) {
     const lastMessageObj = messages[messages.length - 1];
     let lastText = "";
     
-    // AMBIL TEKS DENGAN AMAN (Mendukung teks biasa maupun teks+gambar)
+    // Deteksi teks dengan aman
     if (typeof lastMessageObj.content === 'string') {
       lastText = lastMessageObj.content.toLowerCase();
     } else if (Array.isArray(lastMessageObj.content)) {
-      // Jika bentuknya array (teks + gambar), cari bagian teksnya saja
       const textPart = lastMessageObj.content.find(c => c.type === 'text');
       if (textPart && textPart.text) {
         lastText = textPart.text.toLowerCase();
       }
     }
 
-    // ==========================================
-    // FITUR TES MANUAL (Magic Commands)
-    // ==========================================
+    // Deteksi perintah khusus
     let forcedProvider = null;
     if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
     else if (lastText.includes('!groq')) forcedProvider = 'Groq';
     else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
 
-    // ==========================================
-    // DETEKSI GAMBAR
-    // ==========================================
+    // Deteksi gambar
     const hasImage = Array.isArray(lastMessageObj.content) && 
                      lastMessageObj.content.some(item => item.type === 'image_url');
 
@@ -51,8 +46,10 @@ export default async function handler(req) {
 
     const messagesWithSystem = [systemMessage, ...messages];
 
-    // Daftar Provider
-    let providers = [
+    // ==========================================
+    // DAFTAR SEMUA MODEL (MASTER LIST)
+    // ==========================================
+    const allProviders = [
       {
         name: 'OpenAI',
         endpoint: 'https://api.openai.com/v1/chat/completions',
@@ -66,29 +63,55 @@ export default async function handler(req) {
         model: 'openai/gpt-oss-120b',
       },
       {
-        name: 'Gemini',
+        name: 'Gemini Pro', // Versi Pintar
         endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         apiKey: process.env.GEMINI_API_KEY,
         model: 'gemini-3.5-flash',
+      },
+      {
+        name: 'Gemini Lite', // Versi Cadangan (Anti-Limit)
+        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+        apiKey: process.env.GEMINI_API_KEY,
+        model: 'gemini-3.5-flash-lite',
       }
     ];
 
-    // 1. Saring jika ada Magic Command (!openai, dll)
+    let activeProviders = [...allProviders];
+
+    // 1. Logika Perintah Khusus (Magic Commands)
     if (forcedProvider) {
-      providers = providers.filter(p => p.name === forcedProvider);
+      if (forcedProvider === 'Gemini') {
+        // Jika !gemini, ambil KEDUA model Gemini
+        activeProviders = activeProviders.filter(p => p.name.includes('Gemini'));
+      } else {
+        activeProviders = activeProviders.filter(p => p.name === forcedProvider);
+      }
     }
 
-    // 2. Saring jika ada Gambar (Hapus Groq karena tidak mendukung gambar)
+    // 2. Logika Jika Ada Gambar
     if (hasImage) {
-      console.log("[Info] Gambar terdeteksi. Melewati Groq.");
-      providers = providers.filter(p => p.name !== 'Groq');
+      console.log("[Info] Gambar terdeteksi.");
+      // Buang Groq karena tidak mendukung gambar
+      activeProviders = activeProviders.filter(p => p.name !== 'Groq');
+      
+      // Jika tidak ada perintah khusus, prioritaskan Gemini (Pro lalu Lite) di atas OpenAI
+      if (!forcedProvider) {
+        activeProviders.sort((a, b) => {
+          const aIsGemini = a.name.includes('Gemini');
+          const bIsGemini = b.name.includes('Gemini');
+          return bIsGemini - aIsGemini; 
+        });
+      }
     }
 
-    for (const provider of providers) {
+    // ==========================================
+    // MULAI PROSES FALLBACK
+    // ==========================================
+    for (const provider of activeProviders) {
       if (!provider.apiKey) continue;
 
       try {
-        console.log(`[Mencoba] Menghubungi ${provider.name}...`);
+        console.log(`[Mencoba] Menghubungi ${provider.name} (${provider.model})...`);
         
         const response = await fetch(provider.endpoint, {
           method: 'POST',
@@ -115,17 +138,26 @@ export default async function handler(req) {
           });
         }
         
-        console.error(`[Gagal] ${provider.name} Error: ${response.status}`);
+        // Jika limit (429) atau sibuk (503), log akan mencatatnya lalu lanjut ke model berikutnya
+        console.error(`[Gagal] ${provider.name} Error: ${response.status}. Lanjut ke model berikutnya...`);
+        
       } catch (error) {
         console.error(`[Error Jaringan] ${provider.name}:`, error.message);
       }
     }
 
+    // Jika semua model di daftar sudah dicoba dan semuanya gagal
     return new Response(JSON.stringify({ 
-      error: `⚠️ ${forcedProvider ? `Server ${forcedProvider} error/limit.` : 'Semua server AI sedang sibuk.'} Coba lagi nanti.` 
-    }), { status: 503 });
+      error: `⚠️ Semua model AI sedang sibuk atau limit. Silakan coba beberapa saat lagi.` 
+    }), { 
+      status: 503, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 500, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
   }
 }
