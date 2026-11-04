@@ -61,7 +61,7 @@ body {
 .message { 
   padding: 10px 15px; 
   border-radius: 8px; 
-  max-width: 90%; /* Diperlebar sedikit untuk kode */
+  max-width: 90%;
   line-height: 1.5;
   word-wrap: break-word;
   font-size: 15px;
@@ -81,7 +81,7 @@ body {
   color: #333; 
   align-self: flex-start;
   border-top-left-radius: 0;
-  width: 100%; /* Agar blok kode bisa maksimal */
+  width: 100%;
 }
 
 /* --- STYLING MARKDOWN --- */
@@ -92,25 +92,27 @@ body {
 .bot li { margin-bottom: 5px; }
 .bot h1, .bot h2, .bot h3 { margin-top: 15px; margin-bottom: 10px; color: #075e54; }
 
-/* Styling Blok Kode */
+/* PERBAIKAN: Styling Blok Kode */
 .bot pre {
-  background: #282c34;
+  background: #282c34 !important; /* Warna latar gelap */
   border-radius: 8px;
-  padding: 12px;
+  padding: 30px 12px 12px 12px; /* Padding atas dilebarkan untuk tombol Salin */
   overflow-x: auto;
   margin: 10px 0;
   position: relative;
 }
 
-.bot code {
+.bot pre code {
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;
+  color: #f8f8f2 !important; /* PERBAIKAN: Paksa warna teks jadi putih/terang */
+  background: transparent !important; /* Hilangkan background bawaan */
 }
 
 /* Kode dalam teks (inline code) */
 .bot p code {
   background: #f0f0f0;
-  color: #d9534f;
+  color: #d9534f !important;
   padding: 2px 5px;
   border-radius: 4px;
 }
@@ -128,6 +130,7 @@ body {
   font-size: 12px;
   cursor: pointer;
   transition: 0.3s;
+  z-index: 10;
 }
 
 .copy-btn:hover {
