@@ -1,13 +1,11 @@
 // api/chat.js
 
 export default async function handler(req, res) {
-  // 1. Pastikan hanya menerima request metode POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Gunakan POST.' });
   }
 
   try {
-    // 2. Ambil pesan dari frontend
     let body = req.body;
     if (typeof body === 'string') {
       body = JSON.parse(body);
@@ -18,13 +16,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Format request salah. Field "messages" wajib berupa array.' });
     }
 
-    // 3. Ambil API Key dari Environment Variable Vercel
     const apiKey = process.env.INFERX_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'API Key belum diset. Tambahkan INFERX_API_KEY di pengaturan Vercel.' });
     }
 
-    // 4. Tembak API InferX (URL yang sudah terbukti berhasil)
     const inferxResponse = await fetch('https://model.inferx.net/endpoints/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -38,25 +34,29 @@ export default async function handler(req, res) {
       }),
     });
 
-    // 5. Baca respons dari InferX
     const data = await inferxResponse.json().catch(() => ({}));
 
-    // 6. Jika InferX error (misal: 429 kapasitas penuh, atau 401 key salah)
+    // Penanganan Error yang lebih ramah
     if (!inferxResponse.ok) {
+      // Jika error 429 (Server Penuh)
+      if (inferxResponse.status === 429) {
+        return res.status(429).json({
+          error: '⚠️ Server AI sedang sibuk atau penuh. Silakan tunggu beberapa detik, lalu kirim ulang pesanmu.',
+        });
+      }
+      
+      // Jika error lainnya (401, 500, dll)
       return res.status(inferxResponse.status).json({
-        error: 'Terjadi kesalahan pada server InferX.',
-        status: inferxResponse.status,
+        error: `⚠️ Gagal memproses (Kode: ${inferxResponse.status}). Coba beberapa saat lagi.`,
         details: data,
       });
     }
 
-    // 7. Jika sukses, kirim balik jawaban ke frontend
     return res.status(200).json(data);
 
   } catch (error) {
-    // Tangkap error sistem (misal: koneksi internet server Vercel putus)
     return res.status(500).json({
-      error: 'Terjadi kesalahan internal pada server.',
+      error: '⚠️ Terjadi kesalahan pada jaringan server. Periksa koneksi internetmu.',
       details: error.message,
     });
   }
