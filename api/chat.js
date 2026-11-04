@@ -17,7 +17,7 @@ exports.handler = async function(event, context) {
     
     let forcedProvider = null;
     if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
-    else if (lastText.includes('!groq') || lastText.includes('!grok')) forcedProvider = 'Groq'; // Toleransi typo !grok
+    else if (lastText.includes('!groq') || lastText.includes('!grok')) forcedProvider = 'Groq';
     else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
 
     const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
@@ -29,15 +29,22 @@ exports.handler = async function(event, context) {
       2. JANGAN PERNAH membungkus teks obrolan biasa, sapaan, atau penjelasan non-kode ke dalam blok kode. Jawab obrolan biasa dengan teks biasa (plain text).
       3. JANGAN memotong kode.` 
     };
+
+    // --- PERBAIKAN DI SINI ---
+    // Menyaring setiap pesan agar HANYA berisi 'role' dan 'content'
+    const cleanMessages = messages.map(msg => {
+      return {
+        role: msg.role,
+        content: msg.content
+      };
+    });
     
-    const finalMessages = [sysMsg, ...messages];
+    // Gabungkan system prompt dengan pesan yang sudah bersih
+    const finalMessages = [sysMsg, ...cleanMessages];
 
     const allProviders = [
       { name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' },
-      
-      // PERBAIKAN DI SINI: Menggunakan model Groq yang terbaru & stabil
       { name: 'Groq', endpoint: 'https://api.groq.com/openai/v1/chat/completions', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' },
-      
       { name: 'Gemini Pro', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash' },
       { name: 'Gemini Lite', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash-lite' }
     ];
@@ -66,7 +73,6 @@ exports.handler = async function(event, context) {
             body: JSON.stringify({ choices: [{ message: { content: data.choices[0].message.content } }] })
           };
         } else {
-          // Menangkap pesan error asli dari API
           const errData = await res.json().catch(() => ({}));
           lastErrorMsg = `${p.name} Error: ${res.status} ${errData.error?.message ? '- ' + errData.error.message : ''}`;
         }
