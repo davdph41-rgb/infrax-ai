@@ -9,7 +9,7 @@ export default async function handler(req) {
   try {
     const body = await req.json();
     const messages = body?.messages;
-    const apiKey = process.env.GROQ_API_KEY; // <-- Menggunakan API Key Groq
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Format messages salah' }), { status: 400 });
@@ -18,7 +18,6 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'API Key Groq belum diset di Vercel.' }), { status: 500 });
     }
 
-    // System Prompt agar AI rapi dalam memberikan kode (Markdown)
     const systemMessage = {
       role: 'system',
       content: `Anda adalah asisten AI. ATURAN WAJIB:
@@ -30,11 +29,11 @@ export default async function handler(req) {
 
     const endpoint = 'https://api.groq.com/openai/v1/chat/completions';
     
-    // Daftar model Groq (Sangat cepat dan cerdas)
+    // Daftar model Groq yang VALID saat ini (2026)
     const modelsToTry = [
-      'llama-3.3-70b-versatile', // Model utama (sangat pintar untuk coding)
-      'llama3-8b-8192',          // Model cadangan (lebih ringan & super cepat)
-      'gemma2-9b-it'             // Model cadangan (dari Google)
+      'openai/gpt-oss-120b', // Model utama (paling cerdas)
+      'openai/gpt-oss-20b',  // Model cadangan (lebih ringan)
+      'qwen/qwen3.8-27b'     // Model cadangan alternatif
     ];
 
     let response;
@@ -51,11 +50,11 @@ export default async function handler(req) {
           model: model,
           messages: [systemMessage, ...messages],
           stream: true,
-          temperature: 0.3 // Menjaga AI tetap fokus dan tidak berhalusinasi
+          temperature: 0.3
         }),
       });
 
-      // Jika berhasil atau error bukan karena model (misal API key salah), hentikan loop
+      // Jika berhasil, atau jika error bukan karena model (misal API Key salah), hentikan loop
       if (response.ok || response.status === 401) {
         isSuccess = response.ok;
         break;
@@ -70,7 +69,6 @@ export default async function handler(req) {
       }), { status: response.status });
     }
 
-    // Kembalikan stream ke frontend
     return new Response(response.body, {
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
