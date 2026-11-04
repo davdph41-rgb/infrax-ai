@@ -21,7 +21,16 @@ exports.handler = async function(event, context) {
     else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
 
     const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
-    const sysMsg = { role: 'system', content: `ATURAN: Bungkus kode dengan blok markdown tiga backtick.` };
+    
+    // PERBAIKAN SYSTEM PROMPT: Lebih tegas membedakan kode dan teks biasa
+    const sysMsg = { 
+      role: 'system', 
+      content: `Anda adalah asisten AI yang ramah. ATURAN MUTLAK:
+      1. JIKA Anda memberikan kode pemrograman (HTML, CSS, JS, Python, dll), WAJIB bungkus dengan blok markdown tiga backtick (contoh: \`\`\`html ... \`\`\`).
+      2. JANGAN PERNAH membungkus teks obrolan biasa, sapaan, atau penjelasan non-kode ke dalam blok kode. Jawab obrolan biasa dengan teks biasa (plain text).
+      3. JANGAN memotong kode.` 
+    };
+    
     const finalMessages = [sysMsg, ...messages];
 
     const allProviders = [
@@ -38,10 +47,8 @@ exports.handler = async function(event, context) {
     let lastErrorMsg = "Semua server AI sibuk atau API Key belum diset.";
 
     for (const p of active) {
-      if (!p.apiKey) {
-        console.log(`API Key ${p.name} kosong.`);
-        continue;
-      }
+      if (!p.apiKey) continue;
+      
       try {
         const res = await fetch(p.endpoint, {
           method: 'POST',
