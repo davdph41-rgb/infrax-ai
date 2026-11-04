@@ -1,6 +1,6 @@
 // api/chat.js
 export const config = { runtime: 'edge' };
-export const maxDuration = 60; // <-- TAMBAHKAN INI (Maksimal 60 detik)
+export const maxDuration = 60;
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -45,30 +45,10 @@ export default async function handler(req) {
     const messagesWithSystem = [systemMessage, ...messages];
 
     const allProviders = [
-      {
-        name: 'OpenAI',
-        endpoint: 'https://api.openai.com/v1/chat/completions',
-        apiKey: process.env.OPENAI_API_KEY,
-        model: 'gpt-4o-mini',
-      },
-      {
-        name: 'Groq',
-        endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        apiKey: process.env.GROQ_API_KEY,
-        model: 'openai/gpt-oss-120b',
-      },
-      {
-        name: 'Gemini Pro',
-        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        apiKey: process.env.GEMINI_API_KEY,
-        model: 'gemini-3.5-flash',
-      },
-      {
-        name: 'Gemini Lite',
-        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        apiKey: process.env.GEMINI_API_KEY,
-        model: 'gemini-3.5-flash-lite',
-      }
+      { name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' },
+      { name: 'Groq', endpoint: 'https://api.groq.com/openai/v1/chat/completions', apiKey: process.env.GROQ_API_KEY, model: 'openai/gpt-oss-120b' },
+      { name: 'Gemini Pro', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash' },
+      { name: 'Gemini Lite', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash-lite' }
     ];
 
     let activeProviders = [...allProviders];
@@ -110,11 +90,14 @@ export default async function handler(req) {
 
         if (response.ok) {
           console.log(`[Sukses] ${provider.name} menjawab.`);
+          
+          // SUNTIKKAN HEADER X-AI-PROVIDER DI SINI
           return new Response(response.body, {
             headers: {
               'Content-Type': 'text/event-stream; charset=utf-8',
               'Cache-Control': 'no-cache, no-transform',
               'Connection': 'keep-alive',
+              'X-AI-Provider': provider.name // <-- NAMA AI DIKIRIM KE FRONTEND
             },
           });
         }
@@ -127,9 +110,7 @@ export default async function handler(req) {
       }
     }
 
-    return new Response(JSON.stringify({ 
-      error: `⚠️ Semua model AI sedang sibuk atau limit.` 
-    }), { 
+    return new Response(JSON.stringify({ error: `⚠️ Semua model AI sedang sibuk.` }), { 
       status: 503, headers: { 'Content-Type': 'application/json' } 
     });
 
