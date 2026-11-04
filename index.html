@@ -83,6 +83,15 @@
   
   <!-- SCRIPT UTAMA -->
   <script src="script.js"></script>
+  <script>
+  // Hapus elemen badge dari halaman setelah dimuat
+  document.addEventListener('DOMContentLoaded', function() {
+    const badgeIframe = document.querySelector('iframe[title="Powered by Netlify"]');
+    if (badgeIframe) {
+      badgeIframe.remove(); // Hapus elemen dari DOM
+    }
+  });
+  </script>
 
   <!-- PENDAFTARAN SERVICE WORKER PWA -->
   <script>
