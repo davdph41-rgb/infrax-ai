@@ -6,21 +6,6 @@ window.toggleSidebar = function() {
   if (overlay) overlay.classList.toggle('open');
 };
 
-// FUNGSI BARU: Membersihkan teks AI yang salah dibungkus blok kode
-function bersihkanTeksAI(teks) {
-  if (!teks) return "";
-  let bersih = teks.trim();
-  
-  // Jika AI membungkus seluruh teks dengan ```text ... ``` atau ``` ... ``` tanpa alasan
-  const pola = /^```(?:text|markdown|plaintext)?\n([\s\S]*?)\n?```$/i;
-  const cocok = bersih.match(pola);
-  
-  if (cocok) {
-    return cocok[1].trim(); // Kembalikan teks di dalamnya saja tanpa kotak
-  }
-  return bersih;
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   const chatBox = document.getElementById('chat-box');
   const userInput = document.getElementById('user-input');
@@ -32,22 +17,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelImageBtn = document.getElementById('cancel-image-btn');
   const historyList = document.getElementById('chat-history-list');
 
-  let allChats = {};
-  try { allChats = JSON.parse(localStorage.getItem('nexus_chats')) || {}; } catch(e){}
-  let currentChatId = localStorage.getItem('nexus_current_chat_id') || null;
+  let currentChatId = null;
   let selectedImageBase64 = null;
+  let allChats = []; 
 
   marked.setOptions({ breaks: true });
 
-  function saveToStorage() {
-    localStorage.setItem('nexus_chats', JSON.stringify(allChats));
-    localStorage.setItem('nexus_current_chat_id', currentChatId);
+  async function fetchChats() {
+    try {
+      const res = await fetch('/api/history');
+      if (!res.ok) throw new Error('Gagal mengambil daftar chat');
+      allChats = await res.json();
+      renderHistory();
+    } catch (e) { console.error(e); }
   }
 
   function renderHistory() {
     if (!historyList) return;
     historyList.innerHTML = '';
-    Object.values(allChats).sort((a, b) => b.timestamp - a.timestamp).forEach(chat => {
+    allChats.forEach(chat => {
       const div = document.createElement('div');
       div.className = `history-item ${chat.id === currentChatId ? 'active' : ''}`;
       div.textContent = chat.title || 'Obrolan Baru';
@@ -56,61 +44,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  window.createNewChat = function() {
+  async function createNewChat() {
     const id = Date.now().toString();
-    allChats[id] = { id: id, title: 'Obrolan Baru', messages: [], timestamp: Date.now() };
+    const title = 'Obrolan Baru';
+    
+    await fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'createChat', chatId: id, title })
+    });
+
     currentChatId = id;
-    saveToStorage();
-    renderHistory();
     chatBox.innerHTML = '';
     addMessage('Halo! Ada yang bisa dibantu?', 'bot', 'System');
-    if (window.innerWidth < 768) window.toggleSidebar();
-  };
-
-  function loadChat(id) {
-    currentChatId = id;
-    saveToStorage();
-    chatBox.innerHTML = '';
-    allChats[id].messages.forEach(msg => {
-      let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c => c.type === 'text')?.text || '' : '');
-      let img = Array.isArray(msg.content) ? msg.content.find(c => c.type === 'image_url')?.image_url.url : null;
-      addMessage(text, msg.role === 'user' ? 'user' : 'bot', msg.senderName, img);
-    });
-    renderHistory();
+    await fetchChats(); 
     if (window.innerWidth < 768) window.toggleSidebar();
   }
 
-  function addMessage(content, sender, senderName, imageBase64 = null) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message', sender);
-    if (senderName) {
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'sender-name';
-      nameDiv.textContent = senderName;
-      msgDiv.appendChild(nameDiv);
+  async function loadChat(id) {
+    currentChatId = id;
+    chatBox.innerHTML = '';
+    
+    try {
+      const res = await fetch(`/api/history?chatId=${id}`);
+      if (!res.ok) throw new Error('Gagal memuat pesan');
+      const messages = await res.json();
+      
+      messages.forEach(msg => {
+        addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot', msg.sender_name, null);
+      });
+    } catch (e) {
+      addMessage('Gagal memuat riwayat chat dari server.', 'bot', 'System Error');
     }
-    if (imageBase64) {
-      const img = document.createElement('img');
-      img.src = imageBase64;
-      img.classList.add('chat-image');
-      msgDiv.appendChild(img);
-    }
-    if (sender === 'bot') {
-      const textSpan = document.createElement('span');
-      textSpan.className = 'markdown-body';
-      // GUNAKAN FUNGSI BERSIHKAN TEKS DI SINI
-      textSpan.innerHTML = marked.parse(bersihkanTeksAI(content || ''));
-      msgDiv.appendChild(textSpan);
-    } else {
-      if (content) {
-        const textNode = document.createElement('span');
-        textNode.textContent = content;
-        msgDiv.appendChild(textNode);
-      }
-    }
-    chatBox.appendChild(msgDiv);
-    chatBox.scrollTop = chatBox.scrollHeight;
-    return msgDiv;
+
+    renderHistory();
+    if (window.innerWidth < 768) window.toggleSidebar();
   }
 
   if (uploadBtn) uploadBtn.addEventListener('click', () => imageInput.click());
@@ -144,11 +112,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function addMessage(content, sender, senderName, imageBase64 = null) {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', sender);
+    if (senderName) {
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'sender-name';
+      nameDiv.textContent = senderName;
+      msgDiv.appendChild(nameDiv);
+    }
+    if (imageBase64) {
+      const img = document.createElement('img');
+      img.src = imageBase64;
+      img.classList.add('chat-image');
+      msgDiv.appendChild(img);
+    }
+    if (sender === 'bot') {
+      const textSpan = document.createElement('span');
+      textSpan.className = 'markdown-body';
+      textSpan.innerHTML = marked.parse(content || '');
+      msgDiv.appendChild(textSpan);
+    } else {
+      if (content) {
+        const textNode = document.createElement('span');
+        textNode.textContent = content;
+        msgDiv.appendChild(textNode);
+      }
+    }
+    chatBox.appendChild(msgDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return msgDiv;
+  }
+
   async function sendMessage() {
     const text = userInput.value.trim();
     if (!text && !selectedImageBase64) return;
 
-    if (!currentChatId || !allChats[currentChatId]) window.createNewChat();
+    if (!currentChatId) await createNewChat();
 
     const currentImage = selectedImageBase64;
     addMessage(text, 'user', 'You', currentImage);
@@ -158,16 +158,27 @@ document.addEventListener('DOMContentLoaded', () => {
       { type: "image_url", image_url: { url: currentImage } }
     ] : text;
 
-    allChats[currentChatId].messages.push({ role: 'user', content: userContent, senderName: 'You' });
-    
-    if (allChats[currentChatId].title === 'Obrolan Baru' && text) {
-      allChats[currentChatId].title = text.substring(0, 25) + (text.length > 25 ? '...' : '');
+    await fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addMessage', chatId: currentChatId, role: 'user', content: text, senderName: 'You'
+      })
+    });
+
+    const currentChat = allChats.find(c => c.id === currentChatId);
+    if (currentChat && currentChat.title === 'Obrolan Baru' && text) {
+      const newTitle = text.substring(0, 25) + (text.length > 25 ? '...' : '');
+      await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'createChat', chatId: currentChatId, title: newTitle })
+      });
+      await fetchChats(); 
     }
-    
+
     userInput.value = '';
     if (cancelImageBtn) cancelImageBtn.click(); 
-    saveToStorage();
-    renderHistory();
 
     sendBtn.disabled = true;
     userInput.disabled = true;
@@ -184,16 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: allChats[currentChatId].messages }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: userContent }] }),
       });
 
       if (!response.ok) {
         if (nameDiv) nameDiv.textContent = 'System Error';
         let errMsg = 'Gagal terhubung ke server.';
-        try {
-          const errData = await response.json();
-          errMsg = errData.error || errMsg;
-        } catch (e) {}
+        try { const errData = await response.json(); errMsg = errData.error || errMsg; } catch (e) {}
         throw new Error(errMsg);
       }
 
@@ -202,22 +210,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const contentType = response.headers.get('content-type');
       
-      // JIKA NETLIFY (Balasan JSON Biasa)
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         const botReply = data.choices[0].message.content;
         
         botMsgDiv.removeChild(cursor);
-        // GUNAKAN FUNGSI BERSIHKAN TEKS DI SINI
-        textSpan.innerHTML = marked.parse(bersihkanTeksAI(botReply));
+        textSpan.innerHTML = marked.parse(botReply);
         textSpan.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
         addCopyButtons(textSpan);
         
-        allChats[currentChatId].messages.push({ role: 'assistant', content: botReply, senderName: aiName });
-        saveToStorage();
+        await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'addMessage', chatId: currentChatId, role: 'assistant', content: botReply, senderName: aiName })
+        });
 
       } else {
-        // JIKA VERCEL (Balasan Stream)
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let done = false, fullText = '', buffer = '';
@@ -237,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   const content = data.choices[0]?.delta?.content || '';
                   if (content) {
                     fullText += content;
-                    textSpan.innerHTML = marked.parse(bersihkanTeksAI(fullText)); 
+                    textSpan.innerHTML = marked.parse(fullText); 
                     chatBox.scrollTop = chatBox.scrollHeight;
                   }
                 } catch (e) {}
@@ -246,17 +254,20 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
         botMsgDiv.removeChild(cursor);
-        textSpan.innerHTML = marked.parse(bersihkanTeksAI(fullText));
+        textSpan.innerHTML = marked.parse(fullText);
         textSpan.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
         addCopyButtons(textSpan);
-        allChats[currentChatId].messages.push({ role: 'assistant', content: fullText, senderName: aiName });
-        saveToStorage();
+        
+        await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'addMessage', chatId: currentChatId, role: 'assistant', content: fullText, senderName: aiName })
+        });
       }
 
     } catch (error) {
       if (botMsgDiv.contains(cursor)) botMsgDiv.removeChild(cursor);
       textSpan.innerHTML = `<span style="color: #d9534f;">${error.message}</span>`;
-      allChats[currentChatId].messages.pop();
     } finally {
       sendBtn.disabled = false;
       userInput.disabled = false;
@@ -284,6 +295,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sendBtn) sendBtn.addEventListener('click', sendMessage);
   if (userInput) userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-  if (currentChatId && allChats[currentChatId]) loadChat(currentChatId);
-  else window.createNewChat();
+  (async () => {
+    await fetchChats();
+    if (allChats.length > 0) {
+      await loadChat(allChats[0].id);
+    } else {
+      await createNewChat();
+    }
+  })();
 });
