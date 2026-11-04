@@ -1,4 +1,3 @@
-// Daftarkan fungsi ke window agar bisa dipanggil dari HTML
 window.toggleSidebar = function() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('overlay');
@@ -24,23 +23,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   marked.setOptions({ breaks: true });
 
-  // --- FUNGSI RIWAYAT (DATABASE) ---
   async function fetchChats() {
     try {
       const res = await fetch('/api/history');
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Error ${res.status}: ${errText}`);
+        const errData = await res.json();
+        throw new Error(errData.error || `HTTP Error ${res.status}`);
       }
       allChats = await res.json();
       renderHistory();
+      return true; // Berhasil
     } catch (e) { 
       console.error(e);
-      // Tampilkan peringatan jika database gagal dihubungi
-      chatBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe6e6; border-radius: 8px;">
-        ⚠️ <b>Gagal Memuat Database:</b> ${e.message}<br><br>
-        Pastikan tabel di Neon sudah dibuat dan Environment Variable <code>DATABASE_URL</code> di Netlify sudah benar.
+      chatBox.innerHTML = `<div style="color: red; padding: 15px; background: #ffe6e6; border-radius: 8px; margin: 10px;">
+        ⚠️ <b>Gagal Memuat Database:</b><br>${e.message}<br><br>
+        <i>Pastikan tabel Neon sudah dibuat dan URL Database benar.</i>
       </div>`;
+      return false; // Gagal
     }
   }
 
@@ -56,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // PASTIKAN FUNGSI INI BISA DIPANGGIL DARI TOMBOL HTML
   window.createNewChat = async function() {
     try {
       const id = Date.now().toString();
@@ -69,7 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!res.ok) {
-        throw new Error('Gagal membuat obrolan baru di database. Pastikan tabel SQL sudah dibuat.');
+        const errData = await res.json();
+        throw new Error(errData.error || 'Gagal membuat obrolan baru.');
       }
 
       currentChatId = id;
@@ -78,11 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
       await fetchChats(); 
       if (window.innerWidth < 768) window.toggleSidebar();
     } catch(e) {
-      alert(e.message);
+      chatBox.innerHTML = `<div style="color: red; padding: 15px; background: #ffe6e6; border-radius: 8px;">
+        ⚠️ <b>Gagal Membuat Chat Baru:</b><br>${e.message}
+      </div>`;
     }
   };
 
-  // Hubungkan tombol HTML ke fungsi
   if (newChatBtn) newChatBtn.onclick = window.createNewChat;
 
   async function loadChat(id) {
@@ -91,21 +91,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     try {
       const res = await fetch(`/api/history?chatId=${id}`);
-      if (!res.ok) throw new Error('Gagal memuat pesan dari database');
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Gagal memuat pesan');
+      }
       const messages = await res.json();
       
-      messages.forEach(msg => {
-        addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot', msg.sender_name, null);
-      });
+      if (messages.length === 0) {
+        addMessage('Halo! Ada yang bisa dibantu?', 'bot', 'System');
+      } else {
+        messages.forEach(msg => {
+          addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot', msg.sender_name, null);
+        });
+      }
     } catch (e) {
-      addMessage('Gagal memuat riwayat chat dari server.', 'bot', 'System Error');
+      // MENAMPILKAN ERROR ASLI DI LAYAR CHAT
+      chatBox.innerHTML = `<div style="color: red; padding: 15px; background: #ffe6e6; border-radius: 8px;">
+        ⚠️ <b>Error Database:</b><br>${e.message}
+      </div>`;
     }
 
     renderHistory();
     if (window.innerWidth < 768) window.toggleSidebar();
   }
 
-  // --- FUNGSI UPLOAD GAMBAR ---
   if (uploadBtn) uploadBtn.addEventListener('click', () => imageInput.click());
   if (imageInput) {
     imageInput.addEventListener('change', (e) => {
@@ -137,7 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- FUNGSI MENAMPILKAN PESAN ---
   function addMessage(content, sender, senderName, imageBase64 = null) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', sender);
@@ -170,14 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return msgDiv;
   }
 
-  // --- FUNGSI KIRIM PESAN ---
   async function sendMessage() {
     const text = userInput.value.trim();
     if (!text && !selectedImageBase64) return;
 
     if (!currentChatId) {
       await window.createNewChat();
-      if (!currentChatId) return; // Hentikan jika createNewChat gagal
+      if (!currentChatId) return;
     }
 
     const currentImage = selectedImageBase64;
@@ -197,7 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
       })
     });
 
-    // Update judul chat jika masih default
     const currentChat = allChats.find(c => c.id === currentChatId);
     if (currentChat && currentChat.title === 'Obrolan Baru' && text) {
       const newTitle = text.substring(0, 25) + (text.length > 25 ? '...' : '');
@@ -227,8 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Riwayat chat yang panjang tidak perlu dikirim ke API jika tidak diperlukan,
-        // tapi untuk konteks AI, kita kirimkan pesan terakhir.
         body: JSON.stringify({ messages: [{ role: 'user', content: userContent }] }),
       });
 
@@ -244,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const contentType = response.headers.get('content-type');
       
-      // Karena kita pakai Netlify, balasannya JSON Utuh (bukan stream)
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         const botReply = data.choices[0].message.content;
@@ -254,7 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
         textSpan.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
         addCopyButtons(textSpan);
         
-        // Simpan balasan AI ke DB
         await fetch('/api/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -262,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
       } else {
-        // Fallback jika kamu pindah ke Vercel (Streaming)
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let done = false, fullText = '', buffer = '';
@@ -332,12 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sendBtn) sendBtn.addEventListener('click', sendMessage);
   if (userInput) userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-  // --- INISIALISASI ---
   (async () => {
-    await fetchChats();
-    if (allChats.length > 0) {
+    const success = await fetchChats();
+    if (success && allChats.length > 0) {
       await loadChat(allChats[0].id);
-    } else if (!chatBox.innerHTML.includes('Gagal Memuat Database')) {
+    } else if (success) {
       await window.createNewChat();
     }
   })();
