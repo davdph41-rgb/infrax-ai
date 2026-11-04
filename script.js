@@ -54,15 +54,22 @@ cancelImageBtn.addEventListener('click', () => {
   previewContainer.style.display = 'none';
 });
 
-// FUNGSI ADD MESSAGE: Sekarang menerima parameter senderName
+// --- FUNGSI ADD MESSAGE DENGAN INLINE STYLE ---
 function addMessage(content, sender, senderName = '', imageBase64 = null) {
   const msgDiv = document.createElement('div');
   msgDiv.classList.add('message', sender);
   
-  // Tampilkan nama pengirim
+  // Tampilkan nama pengirim dengan gaya paksa (inline style)
   if (senderName) {
     const nameDiv = document.createElement('div');
-    nameDiv.classList.add('sender-name');
+    nameDiv.className = 'sender-name';
+    // Gaya paksa agar pasti terlihat
+    nameDiv.style.fontSize = '11px';
+    nameDiv.style.fontWeight = 'bold';
+    nameDiv.style.marginBottom = '4px';
+    nameDiv.style.textTransform = 'uppercase';
+    nameDiv.style.color = sender === 'user' ? '#5a8a62' : '#075e54'; 
+    nameDiv.style.textAlign = sender === 'user' ? 'right' : 'left';
     nameDiv.textContent = senderName;
     msgDiv.appendChild(nameDiv);
   }
@@ -115,7 +122,7 @@ async function sendMessage() {
 
   const currentImage = selectedImageBase64;
   
-  // Tampilkan pesan user dengan nama "You"
+  // Tampilkan nama "You"
   addMessage(text, 'user', 'You', currentImage);
   
   userInput.value = '';
@@ -136,7 +143,6 @@ async function sendMessage() {
   sendBtn.disabled = true;
   userInput.disabled = true;
   
-  // Buat pesan bot kosong dengan nama sementara "Menghubungkan..."
   const botMsgDiv = addMessage('', 'bot', 'Menghubungkan...');
   const textSpan = botMsgDiv.querySelector('.markdown-body');
   const nameDiv = botMsgDiv.querySelector('.sender-name');
@@ -160,15 +166,13 @@ async function sendMessage() {
       } else {
         errorMessage = `⚠️ Server Error (${response.status}).`;
       }
-      
-      // Ubah nama menjadi "Error" jika gagal
       if (nameDiv) nameDiv.textContent = 'System Error';
       throw new Error(errorMessage);
     }
 
-    // BACA HEADER X-AI-PROVIDER (Nama AI yang menjawab)
+    // BACA HEADER DAN GANTI NAMA
     const aiName = response.headers.get('X-AI-Provider') || 'AI';
-    if (nameDiv) nameDiv.textContent = aiName; // Ganti "Menghubungkan..." dengan nama AI asli
+    if (nameDiv) nameDiv.textContent = aiName;
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
