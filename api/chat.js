@@ -17,12 +17,11 @@ exports.handler = async function(event, context) {
     
     let forcedProvider = null;
     if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
-    else if (lastText.includes('!groq')) forcedProvider = 'Groq';
+    else if (lastText.includes('!groq') || lastText.includes('!grok')) forcedProvider = 'Groq'; // Toleransi typo !grok
     else if (lastText.includes('!gemini')) forcedProvider = 'Gemini';
 
     const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
     
-    // PERBAIKAN SYSTEM PROMPT: Lebih tegas membedakan kode dan teks biasa
     const sysMsg = { 
       role: 'system', 
       content: `Anda adalah asisten AI yang ramah. ATURAN MUTLAK:
@@ -35,7 +34,10 @@ exports.handler = async function(event, context) {
 
     const allProviders = [
       { name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' },
-      { name: 'Groq', endpoint: 'https://api.groq.com/openai/v1/chat/completions', apiKey: process.env.GROQ_API_KEY, model: 'openai/gpt-oss-120b' },
+      
+      // PERBAIKAN DI SINI: Menggunakan model Groq yang terbaru & stabil
+      { name: 'Groq', endpoint: 'https://api.groq.com/openai/v1/chat/completions', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' },
+      
       { name: 'Gemini Pro', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash' },
       { name: 'Gemini Lite', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-3.5-flash-lite' }
     ];
@@ -64,7 +66,9 @@ exports.handler = async function(event, context) {
             body: JSON.stringify({ choices: [{ message: { content: data.choices[0].message.content } }] })
           };
         } else {
-          lastErrorMsg = `${p.name} Error: ${res.status}`;
+          // Menangkap pesan error asli dari API
+          const errData = await res.json().catch(() => ({}));
+          lastErrorMsg = `${p.name} Error: ${res.status} ${errData.error?.message ? '- ' + errData.error.message : ''}`;
         }
       } catch (e) { 
         lastErrorMsg = `${p.name} Jaringan Error.`; 
