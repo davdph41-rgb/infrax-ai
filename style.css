@@ -58,9 +58,8 @@ body {
   border-radius: 8px; 
   max-width: 95%;
   line-height: 1.5;
-  /* Mencegah teks panjang merusak layar */
-  word-break: break-word;
-  overflow-wrap: anywhere; 
+  word-wrap: break-word;
+  overflow-wrap: break-word; 
   font-size: 15px;
   position: relative;
 }
@@ -68,23 +67,26 @@ body {
 .user { background: #dcf8c6; color: #333; align-self: flex-end; border-top-right-radius: 0; }
 .bot { background: white; color: #333; align-self: flex-start; border-top-left-radius: 0; width: 100%; }
 
-/* --- STYLING MARKDOWN --- */
-.bot p { margin-bottom: 10px; }
-.bot p:last-child { margin-bottom: 0; }
+/* Styling Gambar di dalam Chat */
+.chat-image {
+  max-width: 100%;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.bot p, .bot li { word-break: break-word; }
 .bot strong { font-weight: 700; }
 .bot ul, .bot ol { margin-left: 20px; margin-bottom: 10px; }
 .bot h1, .bot h2, .bot h3 { margin-top: 15px; margin-bottom: 10px; color: #075e54; }
 
-/* --- STYLING KOLOM KODE --- */
 .bot pre {
   background: #1e1e1e !important; 
   border-radius: 8px;
   padding: 35px 15px 15px 15px;
-  /* Memastikan kode bisa di-scroll menyamping jika kepanjangan */
   overflow-x: auto; 
   margin: 15px 0;
   position: relative;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
   max-width: 100%;
 }
 
@@ -102,9 +104,9 @@ body {
   color: #d9534f !important;
   padding: 2px 5px;
   border-radius: 4px;
+  word-break: break-all;
 }
 
-/* Tombol Salin */
 .copy-btn {
   position: absolute;
   top: 8px;
@@ -116,13 +118,10 @@ body {
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
-  transition: 0.2s;
   display: flex;
   align-items: center;
   gap: 5px;
 }
-
-.copy-btn:hover { background: rgba(255, 255, 255, 0.3); }
 
 .typing-cursor {
   display: inline-block;
@@ -135,11 +134,60 @@ body {
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* --- STYLING INPUT BARU --- */
 .input-area { 
-  display: flex; 
-  padding: 10px; 
   background: #f0f0f0;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-preview-container {
+  padding: 10px 15px 0 15px;
+  position: relative;
+  width: fit-content;
+}
+
+.image-preview-container img {
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid #075e54;
+}
+
+.cancel-image-btn {
+  position: absolute;
+  top: 5px;
+  right: -5px;
+  background: #d9534f;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.input-controls {
+  display: flex;
+  padding: 10px; 
+  gap: 8px;
+  align-items: center;
+}
+
+.upload-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: #075e54;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #user-input { 
@@ -152,9 +200,9 @@ body {
 }
 
 #send-btn { 
-  width: 48px; height: 48px;
+  width: 40px; height: 40px;
   border: none; background: #075e54; color: white; 
-  border-radius: 50%; cursor: pointer; font-size: 18px;
+  border-radius: 50%; cursor: pointer; font-size: 16px;
   display: flex; justify-content: center; align-items: center;
 }
 #send-btn:disabled { background: #a0c4ff; cursor: not-allowed; }
