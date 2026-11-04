@@ -1,7 +1,13 @@
-* {
-  box-sizing: border-box;
+/* Pastikan html dan body mengambil tinggi penuh layar */
+html, body {
+  height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -9,15 +15,14 @@ body {
   background: #e5ddd5;
   display: flex; 
   justify-content: center; 
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  height: 100dvh; /* dvh lebih akurat untuk browser HP */
 }
 
 .app-container {
   display: flex;
   width: 100%;
   max-width: 600px;
+  height: 100%;
   position: relative;
   background: #efeae2;
   box-shadow: 0 0 20px rgba(0,0,0,0.1);
@@ -58,7 +63,13 @@ body {
 .overlay.open { display: block; pointer-events: auto; }
 
 /* --- MAIN CHAT --- */
-.chat-container { width: 100%; display: flex; flex-direction: column; height: 100%; }
+.chat-container { 
+  width: 100%; 
+  display: flex; 
+  flex-direction: column; 
+  height: 100%; 
+  min-height: 0; /* KUNCI PERBAIKAN SCROLL 1 */
+}
 
 .chat-header {
   background: #075e54;
@@ -69,9 +80,10 @@ body {
   gap: 12px;
   z-index: 100;
   position: relative;
+  flex-shrink: 0; /* Header tidak boleh mengecil */
 }
 
-.menu-btn { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; z-index: 101; }
+.menu-btn { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; z-index: 101; padding: 5px; }
 .avatar-header img { width: 40px; height: 40px; border-radius: 50%; background: white; }
 .header-info h2 { font-size: 16px; font-weight: 600; }
 .header-info span { font-size: 12px; color: #a8c7c2; }
@@ -79,6 +91,7 @@ body {
 .chat-box { 
   flex: 1; 
   overflow-y: auto; 
+  min-height: 0; /* KUNCI PERBAIKAN SCROLL 2 */
   padding: 20px; 
   display: flex; 
   flex-direction: column; 
@@ -87,27 +100,28 @@ body {
   background-size: cover;
 }
 
-/* PERBAIKAN DI SINI: Tambahan display flex & overflow */
+/* Bubble Chat */
 .message { 
   padding: 10px 15px; 
   border-radius: 8px; 
-  max-width: 85%; /* Diperkecil sedikit agar aman di HP */
+  max-width: 85%; 
   line-height: 1.5; 
   font-size: 15px; 
   display: flex; 
-  flex-direction: column; /* Agar gambar dan teks turun ke bawah */
-  overflow: hidden; /* Mencegah gambar keluar dari kotak */
+  flex-direction: column; 
+  overflow: hidden; 
+  flex-shrink: 0; /* Mencegah gelembung chat terlipat */
 }
 
 .user { background: #dcf8c6; align-self: flex-end; border-top-right-radius: 0; }
 .bot { background: white; align-self: flex-start; width: 100%; max-width: 95%; }
 
-/* PERBAIKAN DI SINI: Ukuran Gambar */
+/* Gambar */
 .chat-image { 
   max-width: 100%; 
-  height: auto; /* Menjaga proporsi asli gambar */
-  max-height: 250px; /* Membatasi tinggi gambar agar tidak terlalu panjang ke bawah */
-  object-fit: cover; /* Memotong gambar secara rapi jika terlalu tinggi */
+  height: auto; 
+  max-height: 250px; 
+  object-fit: cover; 
   border-radius: 6px; 
   margin-bottom: 8px; 
   display: block;
@@ -117,6 +131,7 @@ body {
 .user .sender-name { color: #5a8a62; text-align: right; }
 .bot .sender-name { color: #075e54; text-align: left; text-transform: uppercase; }
 
+/* Markdown & Code */
 .bot p, .bot li { word-break: break-word; }
 .bot pre { background: #1e1e1e !important; border-radius: 8px; padding: 35px 15px 15px 15px; overflow-x: auto; margin: 15px 0; position: relative; }
 .bot pre code { font-family: 'Courier New', Courier, monospace; font-size: 14px; color: #d4d4d4 !important; background: transparent !important; display: block; }
@@ -125,7 +140,13 @@ body {
 .typing-cursor { display: inline-block; width: 8px; height: 15px; background: #075e54; margin-left: 4px; animation: blink 1s step-end infinite; vertical-align: middle; }
 @keyframes blink { 50% { opacity: 0; } }
 
-.input-area { background: #f0f0f0; display: flex; flex-direction: column; }
+/* Input Area */
+.input-area { 
+  background: #f0f0f0; 
+  display: flex; 
+  flex-direction: column; 
+  flex-shrink: 0; /* Area input tidak boleh mengecil/terdorong */
+}
 .image-preview-container { padding: 10px 15px 0 15px; position: relative; width: fit-content; }
 .image-preview-container img { height: 60px; border-radius: 8px; border: 2px solid #075e54; object-fit: cover; }
 .cancel-image-btn { position: absolute; top: 5px; right: -5px; background: #d9534f; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center;}
