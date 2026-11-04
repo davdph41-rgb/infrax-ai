@@ -58,7 +58,9 @@ body {
   border-radius: 8px; 
   max-width: 95%;
   line-height: 1.5;
-  word-wrap: break-word;
+  /* Mencegah teks panjang merusak layar */
+  word-break: break-word;
+  overflow-wrap: anywhere; 
   font-size: 15px;
   position: relative;
 }
@@ -77,11 +79,13 @@ body {
 .bot pre {
   background: #1e1e1e !important; 
   border-radius: 8px;
-  padding: 35px 15px 15px 15px; /* Padding atas untuk tombol salin */
-  overflow-x: auto;
+  padding: 35px 15px 15px 15px;
+  /* Memastikan kode bisa di-scroll menyamping jika kepanjangan */
+  overflow-x: auto; 
   margin: 15px 0;
   position: relative;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  max-width: 100%;
 }
 
 .bot pre code {
@@ -90,6 +94,7 @@ body {
   color: #d4d4d4 !important; 
   background: transparent !important;
   display: block;
+  white-space: pre; 
 }
 
 .bot p code {
