@@ -1,0 +1,7 @@
+{
+  "name": "nexus-ai",
+  "version": "1.0.0",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}
