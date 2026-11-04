@@ -1,22 +1,17 @@
-// api/chat.js
-export const config = { runtime: 'edge' };
-export const maxDuration = 60;
+// api/chat.js untuk Netlify
 
-export default async function handler(req) {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
-      status: 405, headers: { 'Content-Type': 'application/json' } 
-    });
+exports.handler = async function(event, context) {
+  // 1. Pastikan hanya menerima POST
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   try {
-    const body = await req.json();
+    const body = JSON.parse(event.body);
     let messages = body?.messages;
 
     if (!messages || !Array.isArray(messages)) {
-      return new Response(JSON.stringify({ error: 'Format messages salah' }), { 
-        status: 400, headers: { 'Content-Type': 'application/json' } 
-      });
+      return { statusCode: 400, body: JSON.stringify({ error: 'Format messages salah' }) };
     }
 
     const lastMessageObj = messages[messages.length - 1];
@@ -72,8 +67,6 @@ export default async function handler(req) {
       if (!provider.apiKey) continue;
 
       try {
-        console.log(`[Mencoba] ${provider.name} (${provider.model})...`);
-        
         const response = await fetch(provider.endpoint, {
           method: 'POST',
           headers: {
@@ -83,40 +76,37 @@ export default async function handler(req) {
           body: JSON.stringify({
             model: provider.model,
             messages: messagesWithSystem,
-            stream: true,
+            stream: false, // Netlify Functions standar tidak mendukung streaming langsung, jadi kita ubah ke false sementara
             temperature: 0.3
           }),
         });
 
         if (response.ok) {
-          console.log(`[Sukses] ${provider.name} menjawab.`);
+          const data = await response.json();
+          const botReply = data.choices[0].message.content;
           
-          return new Response(response.body, {
+          return {
+            statusCode: 200,
             headers: {
-              'Content-Type': 'text/event-stream; charset=utf-8',
-              'Cache-Control': 'no-cache, no-transform',
-              'Connection': 'keep-alive',
-              'X-AI-Provider': provider.name,
-              'Access-Control-Expose-Headers': 'X-AI-Provider'
+              'Content-Type': 'application/json',
+              'X-AI-Provider': provider.name
             },
-          });
+            body: JSON.stringify({ 
+              choices: [{ message: { content: botReply } }] 
+            })
+          };
         }
-        
-        const errorText = await response.text().catch(() => "Unknown error");
-        console.error(`[Gagal] ${provider.name} Error: ${response.status} - ${errorText.substring(0, 100)}`);
-        
       } catch (error) {
-        console.error(`[Error Jaringan] ${provider.name}:`, error.message);
+        console.error(`[Error] ${provider.name}:`, error.message);
       }
     }
 
-    return new Response(JSON.stringify({ error: `⚠️ Semua model AI sedang sibuk.` }), { 
-      status: 503, headers: { 'Content-Type': 'application/json' } 
-    });
+    return { 
+      statusCode: 503, 
+      body: JSON.stringify({ error: `⚠️ Semua model AI sedang sibuk.` }) 
+    };
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { 
-      status: 500, headers: { 'Content-Type': 'application/json' } 
-    });
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
-}
+};
