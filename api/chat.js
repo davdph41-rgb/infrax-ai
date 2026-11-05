@@ -16,8 +16,9 @@ exports.handler = async function(event, context) {
     let lastText = typeof lastMessageObj.content === 'string' ? lastMessageObj.content.toLowerCase() : 
                    (Array.isArray(lastMessageObj.content) ? (lastMessageObj.content.find(c => c.type === 'text')?.text || '').toLowerCase() : '');
     
-    // FITUR: Memaksa pencarian dengan !search
+    // DETEKSI PERINTAH PENCARIAN
     const forceSearch = lastText.includes('!search');
+    const searchQuery = forceSearch ? lastText.replace('!search', '').trim() : '';
     
     let forcedProvider = null;
     if (lastText.includes('!openai')) forcedProvider = 'OpenAI';
@@ -26,16 +27,17 @@ exports.handler = async function(event, context) {
 
     const hasImage = Array.isArray(lastMessageObj.content) && lastMessageObj.content.some(i => i.type === 'image_url');
     
+    // DEFINISI TOOLS UNTUK PERTANYAAN BIASA (Tanpa !search)
     const tools = [
       {
         type: "function",
         function: {
           name: "web_search",
-          description: "WAJIB DIGUNAKAN jika user bertanya tentang berita terkini, kejadian hari ini, cuaca, harga saham, atau informasi apa pun yang terjadi setelah tahun 2024.",
+          description: "Mencari informasi terbaru di internet. Gunakan fungsi ini jika user bertanya tentang berita terkini, cuaca, atau fakta yang terjadi setelah tahun 2024.",
           parameters: {
             type: "object",
             properties: {
-              query: { type: "string", description: "Kata kunci pencarian spesifik, contoh: 'berita AI hari ini' atau 'harga bitcoin sekarang'." }
+              query: { type: "string", description: "Kata kunci pencarian." }
             },
             required: ["query"]
           }
@@ -46,10 +48,39 @@ exports.handler = async function(event, context) {
     const basePrompt = `Anda adalah asisten AI yang cerdas. ATURAN MUTLAK:
       1. JIKA memberikan kode, bungkus dengan blok markdown tiga backtick.
       2. JANGAN membungkus teks obrolan biasa ke dalam blok kode.
-      3. Jika user bertanya tentang BERITA TERBARU, KEJADIAN HARI INI, atau HAL YANG REAL-TIME, Anda WAJIB memanggil fungsi 'web_search'.
-      4. Setelah fungsi 'web_search' mengembalikan data, Anda WAJIB merangkum isi berita/data tersebut secara detail ke dalam jawaban Anda. Jangan hanya memberikan kalimat pembuka.`;
+      3. Anda memiliki akses ke data pencarian web. Jika ada data pencarian yang diberikan, GUNAKAN DATA ITU sebagai sumber utama jawaban Anda.`;
     
-    const sysMsg = { role: 'system', content: customPrompt ? `${basePrompt}\n\nKEPRIBADIAN TAMBAHAN:\n${customPrompt}` : basePrompt };
+    let sysMsgContent = customPrompt ? `${basePrompt}\n\nKEPRIBADIAN TAMBAHAN:\n${customPrompt}` : basePrompt;
+
+    // ==========================================
+    // LOGIKA PENCARIAN PAKSA (Jika pakai !search)
+    // ==========================================
+    let searchContext = '';
+    if (forceSearch && process.env.TAVILY_API_KEY && searchQuery) {
+      try {
+        const searchRes = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: process.env.TAVILY_API_KEY,
+            query: searchQuery,
+            search_depth: "basic",
+            include_answer: true
+          })
+        });
+        
+        const searchData = await searchRes.json();
+        if (searchData.results && searchData.results.length > 0) {
+          const resultsText = searchData.results.slice(0, 4).map(r => `Judul: ${r.title}\nKonten: ${r.content}`).join('\n\n');
+          searchContext = `\n\nBERIKUT ADALAH HASIL PENCARIAN WEB TERBARU UNTUK "${searchQuery}":\n\n${resultsText}\n\nTUGAS ANDA: Rangkum hasil pencarian di atas dengan detail untuk menjawab pertanyaan user. Jangan katakan Anda tidak bisa mencari, karena datanya sudah disediakan di atas.`;
+        }
+      } catch (err) {
+        console.error("Tavily Error:", err);
+        searchContext = `\n\n(Sistem mencoba mencari "${searchQuery}" namun gagal terhubung ke internet).`;
+      }
+    }
+
+    const finalSysMsg = { role: 'system', content: sysMsgContent + searchContext };
     let cleanMessages = messages.map(msg => ({ role: msg.role, content: msg.content }));
     
     const allProviders = [
@@ -66,20 +97,19 @@ exports.handler = async function(event, context) {
     let lastErrorMsg = "Semua server AI sibuk.";
     let finalResponse = null;
     let usedProvider = '';
-    let searchDebugInfo = '';
 
     for (const p of active) {
       if (!p.apiKey) continue;
       try {
-        let apiMessages = [sysMsg, ...cleanMessages];
+        let apiMessages = [finalSysMsg, ...cleanMessages];
         
-        // Paksa tool_choice jika user mengetik !search
+        // JIKA KITA SUDAH MENCARI MANUAL (!search), KITA TIDAK PERLU KIRIM PARAMETER TOOLS LAGI.
+        // JIKA TANPA !search, KITA KIRIM TOOLS AGAR AI BISA MEMUTUSKAN SENDIRI.
         const reqBody = { 
           model: p.model, 
           messages: apiMessages, 
           temperature: 0.3,
-          tools: tools,
-          tool_choice: forceSearch ? { type: "function", function: { name: "web_search" } } : "auto"
+          ...(forceSearch ? {} : { tools: tools, tool_choice: "auto" })
         };
 
         let res = await fetch(p.endpoint, {
@@ -92,65 +122,38 @@ exports.handler = async function(event, context) {
           let data = await res.json();
           let botMessage = data.choices[0].message;
 
-          // JIKA AI MEMANGGIL FUNGSI PENCARIAN
-          if (botMessage.tool_calls && botMessage.tool_calls.length > 0) {
+          // JIKA AI MEMILIH MENCARI SENDIRI (Tanpa dipaksa !search)
+          if (!forceSearch && botMessage.tool_calls && botMessage.tool_calls.length > 0) {
             const toolCall = botMessage.tool_calls[0];
             const args = JSON.parse(toolCall.function.arguments);
             const query = args.query;
             
-            console.log(`[Web Search] Mencari: ${query}`);
-            
-            if (!process.env.TAVILY_API_KEY) {
-              searchDebugInfo = "⚠️ API Key Tavily belum diset di Netlify.";
-            } else {
-              // Tembak API Tavily
+            if (process.env.TAVILY_API_KEY) {
               const searchRes = await fetch('https://api.tavily.com/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  api_key: process.env.TAVILY_API_KEY,
-                  query: query,
-                  search_depth: "basic",
-                  include_answer: true
-                })
+                body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query: query, search_depth: "basic" })
               });
               
               const searchData = await searchRes.json();
-              
-              // Jika Tavily berhasil, ambil hasilnya
               if (searchData.results && searchData.results.length > 0) {
                 const resultsText = searchData.results.slice(0, 3).map(r => `Judul: ${r.title}\nKonten: ${r.content}`).join('\n\n');
-                const searchResult = `Hasil Pencarian untuk "${query}":\n\n${resultsText}`;
-
-                // Kirim balik ke AI
+                
                 apiMessages.push(botMessage);
-                apiMessages.push({
-                  role: 'tool',
-                  tool_call_id: toolCall.id,
-                  name: toolCall.function.name,
-                  content: searchResult
-                });
+                apiMessages.push({ role: 'tool', tool_call_id: toolCall.id, name: toolCall.function.name, content: resultsText });
 
-                // Minta AI merangkum hasil pencarian
                 res = await fetch(p.endpoint, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${p.apiKey}` },
                   body: JSON.stringify({ model: p.model, messages: apiMessages, temperature: 0.3 }),
                 });
-                
                 data = await res.json();
                 botMessage = data.choices[0].message;
-              } else {
-                searchDebugInfo = "⚠️ Tavily tidak menemukan hasil untuk pencarian ini.";
               }
             }
-          } else {
-             if (forceSearch) searchDebugInfo = "⚠️ AI gagal memanggil fungsi pencarian meskipun dipaksa.";
           }
 
           finalResponse = botMessage.content;
-          if (searchDebugInfo) finalResponse = `${finalResponse}\n\n*(Info Sistem: ${searchDebugInfo})*`;
-          
           usedProvider = p.name;
           break; 
         } else {
